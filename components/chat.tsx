@@ -12,21 +12,24 @@ import { fetcher } from '@/lib/utils';
 import { Block } from './block';
 import { MultimodalInput } from './multimodal-input';
 import { Messages } from './messages';
-import { VisibilityType } from './visibility-selector';
+import type { VisibilityType } from './visibility-selector';
+import { VisibilityType as VisibilityTypeValue } from './visibility-selector';
 import { useBlockSelector } from '@/hooks/use-block';
 
 export function Chat({
-  id,
-  initialMessages,
-  selectedModelId,
-  selectedVisibilityType,
-  isReadonly,
+  id = '',
+  initialMessages = [],
+  selectedModelId = '',
+  selectedVisibilityType = 'public',
+  isReadonly = false,
+  modelerRef,
 }: {
-  id: string;
-  initialMessages: Array<Message>;
-  selectedModelId: string;
-  selectedVisibilityType: VisibilityType;
-  isReadonly: boolean;
+  id?: string;
+  initialMessages?: Array<Message>;
+  selectedModelId?: string;
+  selectedVisibilityType?: VisibilityType;
+  isReadonly?: boolean;
+  modelerRef?: React.MutableRefObject<any>;
 }) {
   const { mutate } = useSWRConfig();
 
