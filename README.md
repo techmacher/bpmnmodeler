@@ -1,61 +1,125 @@
-<a href="https://chat.vercel.ai/">
-  <img alt="Next.js 14 and App Router-ready AI chatbot." src="app/(chat)/opengraph-image.png">
-  <h1 align="center">Next.js AI Chatbot</h1>
-</a>
+# BPMN Modeler AI (In development)
 
-<p align="center">
-  An Open-Source AI Chatbot Template Built With Next.js and the AI SDK by Vercel.
-</p>
+BPMN Modeler AI is an intelligent business process modeling tool that combines the power of AI with the industry-standard BPMN 2.0 notation. This tool helps business analysts, process designers, and developers create, modify, and manage business process diagrams through natural language interactions.
 
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#model-providers"><strong>Model Providers</strong></a> ·
-  <a href="#deploy-your-own"><strong>Deploy Your Own</strong></a> ·
-  <a href="#running-locally"><strong>Running locally</strong></a>
-</p>
-<br/>
+![BPMN Modeler AI Screenshot](public/images/bpmn llm.png)
 
 ## Features
 
-- [Next.js](https://nextjs.org) App Router
-  - Advanced routing for seamless navigation and performance
-  - React Server Components (RSCs) and Server Actions for server-side rendering and increased performance
-- [AI SDK](https://sdk.vercel.ai/docs)
-  - Unified API for generating text, structured objects, and tool calls with LLMs
-  - Hooks for building dynamic chat and generative user interfaces
-  - Supports OpenAI (default), Anthropic, Cohere, and other model providers
-- [shadcn/ui](https://ui.shadcn.com)
-  - Styling with [Tailwind CSS](https://tailwindcss.com)
-  - Component primitives from [Radix UI](https://radix-ui.com) for accessibility and flexibility
-- Data Persistence
-  - [Vercel Postgres powered by Neon](https://vercel.com/storage/postgres) for saving chat history and user data
-  - [Vercel Blob](https://vercel.com/storage/blob) for efficient file storage
-- [NextAuth.js](https://github.com/nextauthjs/next-auth)
-  - Simple and secure authentication
+### AI-Powered Process Modeling
+- Create BPMN diagrams using natural language descriptions
+- Modify existing diagrams through conversation
+- Get expert guidance on BPMN best practices
+- Receive suggestions for process improvements
 
-## Model Providers
+### Smart Diagram Management
+- Each chat automatically creates and maintains its own diagram
+- Rename and organize your process diagrams
+- Delete chats and associated diagrams together
+- Full version history of your process models
 
-This template ships with OpenAI `gpt-4o` as the default. However, with the [AI SDK](https://sdk.vercel.ai/docs), you can switch LLM providers to [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Cohere](https://cohere.com/), and [many more](https://sdk.vercel.ai/providers/ai-sdk-providers) with just a few lines of code.
+### Professional BPMN Editor
+- Full BPMN 2.0 compliant modeler
+- Interactive diagram editing
+- Expand to full-screen mode
+- Export diagrams as images or .bpmn files
+- Fit-to-view functionality
+- Multiple size options (small/medium/large)
 
-## Deploy Your Own
+### User Interface
+- Dark-themed sidebar for easy navigation
+- Chat interface for AI interaction
+- Real-time diagram updates
+- Clean, modern design
 
-You can deploy your own version of the Next.js AI Chatbot to Vercel with one click:
+## Getting Started
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fai-chatbot&env=AUTH_SECRET,OPENAI_API_KEY&envDescription=Learn%20more%20about%20how%20to%20get%20the%20API%20Keys%20for%20the%20application&envLink=https%3A%2F%2Fgithub.com%2Fvercel%2Fai-chatbot%2Fblob%2Fmain%2F.env.example&demo-title=AI%20Chatbot&demo-description=An%20Open-Source%20AI%20Chatbot%20Template%20Built%20With%20Next.js%20and%20the%20AI%20SDK%20by%20Vercel.&demo-url=https%3A%2F%2Fchat.vercel.ai&stores=[{%22type%22:%22postgres%22},{%22type%22:%22blob%22}])
+1. **Installation**
+   ```bash
+   # Clone the repository
+   git clone https://github.com/dylantullberg/bpmn-modeler-ai.git
+   cd bpmn-modeler-ai
 
-## Running locally
+   # Install dependencies
+   pnpm install
+   ```
 
-You will need to use the environment variables [defined in `.env.example`](.env.example) to run Next.js AI Chatbot. It's recommended you use [Vercel Environment Variables](https://vercel.com/docs/projects/environment-variables) for this, but a `.env` file is all that is necessary.
+2. **Environment Setup**
+   ```bash
+   # Copy the example environment file
+   cp .env.example .env.local
 
-> Note: You should not commit your `.env` file or it will expose secrets that will allow others to control access to your various OpenAI and authentication provider accounts.
+   # Configure your environment variables
+   # Required: DATABASE_URL, OPENAI_API_KEY
+   ```
 
-1. Install Vercel CLI: `npm i -g vercel`
-2. Link local instance with Vercel and GitHub accounts (creates `.vercel` directory): `vercel link`
-3. Download your environment variables: `vercel env pull`
+3. **Database Setup**
+   ```bash
+   # Run database migrations
+   pnpm db:migrate
+   ```
 
-```bash
-pnpm install
-pnpm dev
-```
+4. **Development**
+   ```bash
+   # Start the development server
+   pnpm dev
+   ```
 
-Your app template should now be running on [localhost:3000](http://localhost:3000/).
+   The application will be available at http://localhost:3000 and will automatically redirect to the dashboard.
+
+5. **Build**
+   ```bash
+   # Create production build
+   pnpm build
+   ```
+
+## Usage
+
+1. **Creating a New Process**
+   - Click "New chat" in the sidebar
+   - Describe your process to the AI
+   - The AI will create a BPMN diagram based on your description
+
+2. **Modifying a Process**
+   - Open an existing chat from the sidebar
+   - Describe the changes you want to make
+   - The AI will guide you through making the modifications
+
+3. **Managing Diagrams**
+   - Export diagrams using the bottom toolbar
+   - Adjust the view using size controls
+   - Use "Fit to view" for optimal display
+   - Expand to full screen for detailed editing
+
+## Technology Stack
+
+- **Frontend**
+  - Next.js 14
+  - React
+  - Tailwind CSS
+  - bpmn-js
+
+- **Backend**
+  - Next.js API Routes
+  - PostgreSQL with Drizzle ORM
+  - OpenAI API
+
+- **Development**
+  - TypeScript
+  - ESLint
+  - Prettier
+  - Biome
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and contribute to the project.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Built on top of [bpmn-js](https://github.com/bpmn-io/bpmn-js) by Camunda
+- Inspired by the [Vercel AI Chatbot](https://github.com/vercel/ai-chatbot)
+- Uses OpenAI's GPT models for natural language processing

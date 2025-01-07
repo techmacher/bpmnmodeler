@@ -1,9 +1,16 @@
-import NextAuth from 'next-auth';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-import { authConfig } from '@/app/(auth)/auth.config';
+export function middleware(request: NextRequest) {
+  // For development, add a mock user session
+  const response = NextResponse.next();
+  response.headers.set('x-user-id', 'default-user');
+  return response;
+}
 
-export default NextAuth(authConfig).auth;
-
+// Skip auth for development
 export const config = {
-  matcher: ['/', '/:id', '/api/:path*', '/login', '/register'],
+  matcher: [
+    '/((?!api/auth|_next/static|_next/image|favicon.ico).*)',
+  ],
 };

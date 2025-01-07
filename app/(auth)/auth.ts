@@ -1,14 +1,12 @@
-import { compare } from 'bcrypt-ts';
-import NextAuth, { type User, type Session } from 'next-auth';
-import Credentials from 'next-auth/providers/credentials';
-
-import { getUser } from '@/lib/db/queries';
-
+import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
 
-interface ExtendedSession extends Session {
-  user: User;
-}
+// For development, provide a default user session
+const defaultUser = {
+  id: 'default-user',
+  name: 'Default User',
+  email: 'user@example.com',
+};
 
 export const {
   handlers: { GET, POST },
@@ -17,39 +15,19 @@ export const {
   signOut,
 } = NextAuth({
   ...authConfig,
-  providers: [
-    Credentials({
-      credentials: {},
-      async authorize({ email, password }: any) {
-        const users = await getUser(email);
-        if (users.length === 0) return null;
-        // biome-ignore lint: Forbidden non-null assertion.
-        const passwordsMatch = await compare(password, users[0].password!);
-        if (!passwordsMatch) return null;
-        return users[0] as any;
-      },
-    }),
-  ],
+  providers: [],
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-      }
-
-      return token;
+    async session({ session }) {
+      // Always return the default user session for development
+      return {
+        ...session,
+        user: defaultUser,
+      };
     },
-    async session({
-      session,
-      token,
-    }: {
-      session: ExtendedSession;
-      token: any;
-    }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-      }
-
-      return session;
+    async jwt({ token }) {
+      // Add default user ID to the token
+      token.id = defaultUser.id;
+      return token;
     },
   },
 });

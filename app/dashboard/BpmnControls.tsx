@@ -1,12 +1,15 @@
 'use client';
 
-import React from 'react';
-import Modeler from 'bpmn-js/lib/Modeler';
+import React, { useState } from 'react';
+import type NavigatedViewer from 'bpmn-js/lib/NavigatedViewer';
+import { Button } from 'components/ui/button';
+import { Maximize2, Minimize2, Download, FileDown, ZoomIn } from 'lucide-react';
+
 interface BpmnControlsProps {
-  modelerRef: React.MutableRefObject<Modeler | null>;
+  modelerRef: React.MutableRefObject<NavigatedViewer | null>;
 }
 
-interface ModelerWithContainer extends Modeler {
+interface ViewerWithContainer extends NavigatedViewer {
   _container?: HTMLElement;
   get: (service: string) => any;
 }
@@ -36,15 +39,82 @@ export default function BpmnControls({ modelerRef }: BpmnControlsProps) {
     }
   };
 
-  const handleSetSize = (size: 'small' | 'medium' | 'large') => {
-    const modeler = modelerRef.current as ModelerWithContainer;
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const handleExpand = () => {
+    const modeler = modelerRef.current as ViewerWithContainer;
     if (!modeler?._container) return;
-    modeler._container.style.width = size === 'small' ? '400px' 
-      : size === 'medium' ? '600px' 
-      : '800px';
-    modeler._container.style.height = size === 'small' ? '300px' 
-      : size === 'medium' ? '500px' 
-      : '700px';
+
+    const container = modeler._container;
+    const parent = container.parentElement;
+    if (!parent) return;
+
+    setIsExpanded(!isExpanded);
+    if (!isExpanded) {
+      // Create a full-screen white background
+      const overlay = document.createElement('div');
+      overlay.id = 'bpmn-overlay';
+      overlay.style.position = 'fixed';
+      overlay.style.top = '0';
+      overlay.style.left = '0';
+      overlay.style.width = '100vw';
+      overlay.style.height = '100vh';
+      overlay.style.backgroundColor = 'white';
+      overlay.style.zIndex = '49';
+      document.body.appendChild(overlay);
+
+      // Position the modeler on top of the overlay
+      container.style.position = 'fixed';
+      container.style.top = '0';
+      container.style.left = '0';
+      container.style.width = '100vw';
+      container.style.height = '100vh';
+      container.style.zIndex = '50';
+      container.style.backgroundColor = 'white';
+
+      // Add minimize button
+      const minimizeBtn = document.createElement('button');
+      minimizeBtn.id = 'bpmn-minimize';
+      minimizeBtn.innerHTML = `
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 14h16M4 10h16" />
+        </svg>
+      `;
+      minimizeBtn.style.position = 'fixed';
+      minimizeBtn.style.top = '1rem';
+      minimizeBtn.style.right = '1rem';
+      minimizeBtn.style.zIndex = '51';
+      minimizeBtn.style.padding = '0.5rem';
+      minimizeBtn.style.backgroundColor = 'white';
+      minimizeBtn.style.border = '1px solid #e5e7eb';
+      minimizeBtn.style.borderRadius = '0.5rem';
+      minimizeBtn.style.cursor = 'pointer';
+      minimizeBtn.style.transition = 'all 0.2s';
+      minimizeBtn.onmouseover = () => {
+        minimizeBtn.style.backgroundColor = '#f3f4f6';
+      };
+      minimizeBtn.onmouseout = () => {
+        minimizeBtn.style.backgroundColor = 'white';
+      };
+      minimizeBtn.onclick = handleExpand;
+      document.body.appendChild(minimizeBtn);
+    } else {
+      // Remove the overlay and minimize button
+      const overlay = document.getElementById('bpmn-overlay');
+      const minimizeBtn = document.getElementById('bpmn-minimize');
+      overlay?.remove();
+      minimizeBtn?.remove();
+
+      // Reset the modeler position
+      container.style.position = 'absolute';
+      container.style.top = '0';
+      container.style.left = '0';
+      container.style.right = '0';
+      container.style.bottom = '0';
+      container.style.width = 'auto';
+      container.style.height = 'auto';
+      container.style.zIndex = 'auto';
+    }
     handleFitToView();
   };
 
@@ -60,25 +130,46 @@ export default function BpmnControls({ modelerRef }: BpmnControlsProps) {
   }
 
   return (
-    <div className="absolute bottom-2 right-2 p-2 bg-white shadow-md flex space-x-2">
-      <button onClick={handleExportSvg} className="bg-blue-500 text-white px-3 py-1">
-        Download as image
-      </button>
-      <button onClick={handleExportBpmn} className="bg-blue-500 text-white px-3 py-1">
-        Export as .bpmn
-      </button>
-      <button onClick={handleFitToView} className="bg-blue-500 text-white px-3 py-1">
-        Fit to view
-      </button>
-      <button onClick={() => handleSetSize('small')} className="bg-gray-200 px-2 py-1">
-        Small
-      </button>
-      <button onClick={() => handleSetSize('medium')} className="bg-gray-200 px-2 py-1">
-        Medium
-      </button>
-      <button onClick={() => handleSetSize('large')} className="bg-gray-200 px-2 py-1">
-        Large
-      </button>
+    <div className={`${isExpanded ? 'fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[51]' : 'absolute bottom-4 left-1/2 transform -translate-x-1/2'} flex items-center bg-white rounded-lg shadow-lg border border-gray-200 p-1`}>
+      <div className="flex items-center gap-1">
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={handleFitToView} 
+          className="text-gray-600 hover:text-gray-900"
+          title="Fit to view"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={handleExpand}
+          className="text-gray-600 hover:text-gray-900"
+          title={isExpanded ? "Minimize" : "Maximize"}
+        >
+          {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </Button>
+        <div className="h-6 w-px bg-gray-200 mx-1"></div>
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={handleExportSvg} 
+          className="text-gray-600 hover:text-gray-900"
+          title="Export as SVG"
+        >
+          <Download className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={handleExportBpmn} 
+          className="text-gray-600 hover:text-gray-900"
+          title="Export as BPMN"
+        >
+          <FileDown className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }

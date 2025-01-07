@@ -1,330 +1,200 @@
-import 'server-only';
-
-import { genSaltSync, hashSync } from 'bcrypt-ts';
-import { and, asc, desc, eq, gt, gte } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-
-import {
-  user,
-  chat,
-  type User,
-  document,
-  type Suggestion,
-  suggestion,
-  type Message,
-  message,
-  vote,
-} from './schema';
-import { BlockKind } from '@/components/block';
-
-// Optionally, if not using email/pass login, you can
-// use the Drizzle adapter for Auth.js / NextAuth
-// https://authjs.dev/reference/adapter/drizzle
-
-// biome-ignore lint: Forbidden non-null assertion.
-const client = postgres(process.env.POSTGRES_URL!);
-const db = drizzle(client);
-
-export async function getUser(email: string): Promise<Array<User>> {
-  try {
-    return await db.select().from(user).where(eq(user.email, email));
-  } catch (error) {
-    console.error('Failed to get user from database');
-    throw error;
-  }
-}
-
-export async function createUser(email: string, password: string) {
-  const salt = genSaltSync(10);
-  const hash = hashSync(password, salt);
-
-  try {
-    return await db.insert(user).values({ email, password: hash });
-  } catch (error) {
-    console.error('Failed to create user in database');
-    throw error;
-  }
-}
-
-export async function saveChat({
-  id,
-  userId,
-  title,
-}: {
-  id: string;
-  userId: string;
-  title: string;
-}) {
-  try {
-    return await db.insert(chat).values({
-      id,
-      createdAt: new Date(),
-      userId,
-      title,
-    });
-  } catch (error) {
-    console.error('Failed to save chat in database');
-    throw error;
-  }
-}
-
-export async function deleteChatById({ id }: { id: string }) {
-  try {
-    await db.delete(vote).where(eq(vote.chatId, id));
-    await db.delete(message).where(eq(message.chatId, id));
-
-    return await db.delete(chat).where(eq(chat.id, id));
-  } catch (error) {
-    console.error('Failed to delete chat by id from database');
-    throw error;
-  }
-}
-
-export async function getChatsByUserId({ id }: { id: string }) {
-  try {
-    return await db
-      .select()
-      .from(chat)
-      .where(eq(chat.userId, id))
-      .orderBy(desc(chat.createdAt));
-  } catch (error) {
-    console.error('Failed to get chats by user from database');
-    throw error;
-  }
-}
+import { and, desc, eq, lt } from 'drizzle-orm';
+import { db } from './index';
+import { chat, diagram, message } from './schema';
+import type { Message } from 'ai';
 
 export async function getChatById({ id }: { id: string }) {
-  try {
-    const [selectedChat] = await db.select().from(chat).where(eq(chat.id, id));
-    return selectedChat;
-  } catch (error) {
-    console.error('Failed to get chat by id from database');
-    throw error;
-  }
+  const [result] = await db
+    .select()
+    .from(chat)
+    .where(eq(chat.id, id))
+    .limit(1)
+    .execute();
+
+  return result;
 }
 
-export async function saveMessages({ messages }: { messages: Array<Message> }) {
-  try {
-    return await db.insert(message).values(messages);
-  } catch (error) {
-    console.error('Failed to save messages in database', error);
-    throw error;
-  }
+export async function getDiagramByChatId({ chatId }: { chatId: string }) {
+  const [result] = await db
+    .select({
+      diagrams: diagram,
+      chats: chat,
+    })
+    .from(diagram)
+    .innerJoin(chat, eq(chat.diagramId, diagram.id))
+    .where(eq(chat.id, chatId))
+    .limit(1)
+    .execute();
+
+  return result.diagrams;
 }
 
-export async function getMessagesByChatId({ id }: { id: string }) {
-  try {
-    return await db
-      .select()
-      .from(message)
-      .where(eq(message.chatId, id))
-      .orderBy(asc(message.createdAt));
-  } catch (error) {
-    console.error('Failed to get messages by chat id from database', error);
-    throw error;
-  }
-}
-
-export async function voteMessage({
-  chatId,
-  messageId,
-  type,
-}: {
-  chatId: string;
-  messageId: string;
-  type: 'up' | 'down';
-}) {
-  try {
-    const [existingVote] = await db
-      .select()
-      .from(vote)
-      .where(and(eq(vote.messageId, messageId)));
-
-    if (existingVote) {
-      return await db
-        .update(vote)
-        .set({ isUpvoted: type === 'up' })
-        .where(and(eq(vote.messageId, messageId), eq(vote.chatId, chatId)));
-    }
-    return await db.insert(vote).values({
-      chatId,
-      messageId,
-      isUpvoted: type === 'up',
-    });
-  } catch (error) {
-    console.error('Failed to upvote message in database', error);
-    throw error;
-  }
-}
-
-export async function getVotesByChatId({ id }: { id: string }) {
-  try {
-    return await db.select().from(vote).where(eq(vote.chatId, id));
-  } catch (error) {
-    console.error('Failed to get votes by chat id from database', error);
-    throw error;
-  }
-}
-
-export async function saveDocument({
-  id,
-  title,
-  kind,
-  content,
+export async function createChatWithDiagram({
   userId,
+  title,
+  initialXml,
 }: {
-  id: string;
-  title: string;
-  kind: BlockKind;
-  content: string;
   userId: string;
+  title: string;
+  initialXml: string;
 }) {
-  try {
-    return await db.insert(document).values({
-      id,
-      title,
-      kind,
-      content,
+  const [newDiagram] = await db
+    .insert(diagram)
+    .values({
+      name: title,
+      xml: initialXml,
       userId,
-      createdAt: new Date(),
-    });
-  } catch (error) {
-    console.error('Failed to save document in database');
-    throw error;
-  }
+    })
+    .returning()
+    .execute();
+
+  const [newChat] = await db
+    .insert(chat)
+    .values({
+      title,
+      userId,
+      diagramId: newDiagram.id,
+    })
+    .returning()
+    .execute();
+
+  return {
+    chatId: newChat.id,
+    diagramId: newDiagram.id,
+  };
 }
 
-export async function getDocumentsById({ id }: { id: string }) {
-  try {
-    const documents = await db
-      .select()
-      .from(document)
-      .where(eq(document.id, id))
-      .orderBy(asc(document.createdAt));
-
-    return documents;
-  } catch (error) {
-    console.error('Failed to get document by id from database');
-    throw error;
-  }
-}
-
-export async function getDocumentById({ id }: { id: string }) {
-  try {
-    const [selectedDocument] = await db
-      .select()
-      .from(document)
-      .where(eq(document.id, id))
-      .orderBy(desc(document.createdAt));
-
-    return selectedDocument;
-  } catch (error) {
-    console.error('Failed to get document by id from database');
-    throw error;
-  }
-}
-
-export async function deleteDocumentsByIdAfterTimestamp({
-  id,
-  timestamp,
-}: {
-  id: string;
-  timestamp: Date;
-}) {
-  try {
-    await db
-      .delete(suggestion)
-      .where(
-        and(
-          eq(suggestion.documentId, id),
-          gt(suggestion.documentCreatedAt, timestamp),
-        ),
-      );
-
-    return await db
-      .delete(document)
-      .where(and(eq(document.id, id), gt(document.createdAt, timestamp)));
-  } catch (error) {
-    console.error(
-      'Failed to delete documents by id after timestamp from database',
-    );
-    throw error;
-  }
-}
-
-export async function saveSuggestions({
-  suggestions,
-}: {
-  suggestions: Array<Suggestion>;
-}) {
-  try {
-    return await db.insert(suggestion).values(suggestions);
-  } catch (error) {
-    console.error('Failed to save suggestions in database');
-    throw error;
-  }
-}
-
-export async function getSuggestionsByDocumentId({
-  documentId,
-}: {
-  documentId: string;
-}) {
-  try {
-    return await db
-      .select()
-      .from(suggestion)
-      .where(and(eq(suggestion.documentId, documentId)));
-  } catch (error) {
-    console.error(
-      'Failed to get suggestions by document version from database',
-    );
-    throw error;
-  }
-}
-
-export async function getMessageById({ id }: { id: string }) {
-  try {
-    return await db.select().from(message).where(eq(message.id, id));
-  } catch (error) {
-    console.error('Failed to get message by id from database');
-    throw error;
-  }
-}
-
-export async function deleteMessagesByChatIdAfterTimestamp({
+export async function updateDiagram({
   chatId,
-  timestamp,
+  xml,
 }: {
   chatId: string;
-  timestamp: Date;
+  xml: string;
 }) {
-  try {
-    return await db
-      .delete(message)
-      .where(
-        and(eq(message.chatId, chatId), gte(message.createdAt, timestamp)),
-      );
-  } catch (error) {
-    console.error(
-      'Failed to delete messages by id after timestamp from database',
-    );
-    throw error;
-  }
+  const chatResult = await db
+    .select()
+    .from(chat)
+    .where(eq(chat.id, chatId))
+    .limit(1)
+    .execute();
+
+  if (!chatResult[0]?.diagramId) return null;
+
+  const [updatedDiagram] = await db
+    .update(diagram)
+    .set({ xml })
+    .where(eq(diagram.id, chatResult[0].diagramId))
+    .returning()
+    .execute();
+
+  return updatedDiagram;
 }
 
-export async function updateChatVisiblityById({
+export async function renameChatAndDiagram({
   chatId,
-  visibility,
+  newTitle,
 }: {
   chatId: string;
-  visibility: 'private' | 'public';
+  newTitle: string;
 }) {
-  try {
-    return await db.update(chat).set({ visibility }).where(eq(chat.id, chatId));
-  } catch (error) {
-    console.error('Failed to update chat visibility in database');
-    throw error;
+  const [chatResult] = await db
+    .select({
+      chat: chat,
+      diagram: diagram,
+    })
+    .from(chat)
+    .innerJoin(diagram, eq(chat.diagramId, diagram.id))
+    .where(eq(chat.id, chatId))
+    .limit(1)
+    .execute();
+
+  if (!chatResult) return null;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(chat)
+      .set({ title: newTitle })
+      .where(eq(chat.id, chatId))
+      .execute();
+
+    await tx
+      .update(diagram)
+      .set({ name: newTitle })
+      .where(eq(diagram.id, chatResult.diagram.id))
+      .execute();
+  });
+
+  return {
+    chatId,
+    title: newTitle,
+  };
+}
+
+export async function saveMessages({
+  messages: messagesToSave,
+}: {
+  messages: Array<Message & { chatId: string; createdAt: Date }>;
+}) {
+  const [savedMessage] = await db
+    .insert(message)
+    .values(messagesToSave)
+    .returning()
+    .execute();
+
+  return savedMessage;
+}
+
+export async function deleteChatAndDiagram({ chatId }: { chatId: string }) {
+  // Messages and diagram will be cascade deleted due to foreign key constraints
+  await db.delete(chat).where(eq(chat.id, chatId)).execute();
+}
+
+export async function getMessagesByChat({
+  chatId,
+  cursor,
+  limit = 10,
+}: {
+  chatId: string;
+  cursor?: Date;
+  limit?: number;
+}) {
+  const conditions = [eq(message.chatId, chatId)];
+  if (cursor) {
+    conditions.push(lt(message.createdAt, cursor));
   }
+
+  return db
+    .select()
+    .from(message)
+    .where(and(...conditions))
+    .orderBy(desc(message.createdAt))
+    .limit(limit)
+    .execute();
+}
+
+export async function getChats({
+  userId,
+  cursor,
+  limit = 10,
+}: {
+  userId: string;
+  cursor?: Date;
+  limit?: number;
+}) {
+  const conditions = [eq(chat.userId, userId)];
+  if (cursor) {
+    conditions.push(lt(chat.createdAt, cursor));
+  }
+
+  return db
+    .select({
+      chat: chat,
+      diagram: diagram,
+    })
+    .from(chat)
+    .innerJoin(diagram, eq(chat.diagramId, diagram.id))
+    .where(and(...conditions))
+    .orderBy(desc(chat.createdAt))
+    .limit(limit)
+    .execute();
 }
