@@ -2,7 +2,7 @@
 
 BPMN Modeler AI is an intelligent business process modeling tool that combines the power of AI with the industry-standard BPMN 2.0 notation. This tool helps business analysts, process designers, and developers create, modify, and manage business process diagrams through natural language interactions.
 
-![BPMN Modeler AI Screenshot](public/images/bpmn llm.png)
+![bpmn llm](https://github.com/user-attachments/assets/3cd0e5b5-3fb2-439f-8da4-b2380fbba01e)
 
 ## Features
 
