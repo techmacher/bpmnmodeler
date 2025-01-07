@@ -37,7 +37,7 @@ BPMN Modeler AI is an intelligent business process modeling tool that combines t
 1. **Installation**
    ```bash
    # Clone the repository
-   git clone https://github.com/dylantullberg/bpmn-modeler-ai.git
+   git clone https://github.com/dylantullberg/bpmn-modeler.git
    cd bpmn-modeler-ai
 
    # Install dependencies
