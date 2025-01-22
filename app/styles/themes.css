@@ -1,4 +1,13 @@
 :root {
+  /* Z-Index Layering System */
+  --z-background: 0;  /* Grid, pools, lanes */
+  --z-data: 11;      /* Data objects, stores, annotations */
+  --z-flow: 21;      /* Sequence flows, message flows */
+  --z-activity: 31;  /* Tasks, gateways */
+  --z-event: 41;     /* All event types */
+  --z-boundary: 51;  /* Boundary events, labels */
+  --z-interactive: 61; /* Selection, handles, tooltips */
+
   /* Light theme (default) */
   --event-intermediate: #888;
   --event-border: #666;
@@ -15,6 +24,15 @@
 }
 
 [data-theme='dark'] {
+  /* Z-Index Layering System - preserved in dark theme */
+  --z-background: 0;
+  --z-data: 11;
+  --z-flow: 21;
+  --z-activity: 31;
+  --z-event: 41;
+  --z-boundary: 51;
+  --z-interactive: 61;
+
   /* Dark theme */
   --event-intermediate: #666;
   --event-border: #888;

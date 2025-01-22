@@ -64,7 +64,7 @@ export default function BpmnToolbar() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="fixed left-6 top-1/2 -translate-y-1/2 backdrop-blur-lg rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-2 flex flex-col gap-2 z-[100] max-h-[80vh] overflow-y-auto bg-white/85 dark:bg-gray-800/85">
+      <div className="fixed left-6 top-1/2 -translate-y-1/2 backdrop-blur-lg rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-2 flex flex-col gap-2 z-[var(--z-interactive)] max-h-[80vh] overflow-y-auto bg-white/85 dark:bg-gray-800/85">
         {Object.entries(toolbarGroups).map(([groupName, elements], groupIndex) => (
           <div key={groupName} className={`flex flex-col gap-1.5 ${groupIndex > 0 ? 'border-t border-gray-200 dark:border-gray-700 pt-2' : ''}`}>
             {elements.map(({ type, label, icon: Icon, description }) => (

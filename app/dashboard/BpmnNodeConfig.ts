@@ -71,7 +71,20 @@ class BpmnConfig {
     this.defaultEdgeOptions = {
       type: 'smoothstep',
       animated: true,
-      style: { stroke: '#666', strokeWidth: 2 }
+      style: { 
+        stroke: '#666', 
+        strokeWidth: 2,
+        transition: 'stroke 0.2s, strokeWidth 0.2s'
+      },
+      markerEnd: {
+        type: 'arrow',
+        width: 20,
+        height: 20,
+        color: '#666'
+      },
+      deletable: true,
+      updatable: true,
+      interactionWidth: 10
     };
 
     // Freeze all objects to prevent modifications

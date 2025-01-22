@@ -34,8 +34,83 @@
 }
 
 /* ReactFlow overrides */
+/* Z-Index Layering System */
+.react-flow {
+  z-index: 0;
+}
+
+.react-flow__background {
+  z-index: var(--z-background) !important;
+}
+
+.react-flow__pane {
+  z-index: var(--z-background) !important;
+}
+
+/* Handle styles and interactions */
+.react-flow__handle {
+  width: 8px !important;
+  height: 8px !important;
+  background-color: #fff !important;
+  border: 2px solid #2196f3 !important;
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease !important;
+  z-index: var(--z-interactive) !important;
+}
+
+.updating-edge .react-flow__handle {
+  z-index: calc(var(--z-interactive) + 1) !important;
+  transform: scale(1.5);
+  background-color: #2196f3 !important;
+  border-color: #1976d2 !important;
+}
+
+.react-flow__handle:hover {
+  z-index: calc(var(--z-interactive) + 1) !important;
+  transform: scale(1.5);
+  background-color: #2196f3 !important;
+  border-color: #1976d2 !important;
+}
+
+.dark .react-flow__handle {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+}
+
+.dark .updating-edge .react-flow__handle,
+.dark .react-flow__handle:hover {
+  background-color: #3b82f6 !important;
+  border-color: #2563eb !important;
+}
+
+.react-flow__edge {
+  z-index: var(--z-flow) !important;
+}
+
+.react-flow__edge-path {
+  z-index: var(--z-flow) !important;
+  stroke-width: 2px !important;
+  transition: stroke 0.2s ease !important;
+}
+
+.react-flow__node-label {
+  z-index: var(--z-boundary) !important;
+}
+
+.react-flow__selection {
+  z-index: var(--z-interactive) !important;
+}
+
+.react-flow__nodesselection-rect {
+  z-index: var(--z-interactive) !important;
+}
+
+.react-flow__panel {
+  z-index: var(--z-interactive) !important;
+}
+
 .react-flow__controls {
   @apply !bg-transparent;
+  z-index: var(--z-interactive) !important;
 }
 
 .react-flow__controls button {
@@ -56,15 +131,11 @@
 
 .react-flow__minimap {
   @apply !bg-transparent;
+  z-index: var(--z-interactive) !important;
 }
 
 .dark .react-flow__minimap {
   @apply !bg-transparent;
-}
-
-.dark .react-flow__handle {
-  background: #4b5563;
-  border-color: #6b7280;
 }
 
 .dark .react-flow__edge-path {

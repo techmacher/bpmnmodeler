@@ -167,7 +167,7 @@ export function BpmnProperties() {
               top: position.y,
               cursor: 'move',
               touchAction: 'none',
-              zIndex: 1000
+              zIndex: 'var(--z-interactive)'
             }}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}

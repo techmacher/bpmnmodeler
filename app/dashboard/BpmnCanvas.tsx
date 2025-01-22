@@ -16,6 +16,8 @@ import ReactFlow, {
   applyNodeChanges,
   applyEdgeChanges,
   OnSelectionChangeParams,
+  EdgeChange,
+  OnEdgeUpdateFunc,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useStore } from '@/lib/store';
@@ -63,7 +65,16 @@ function ThemeToggle() {
 }
 
 export default function BpmnCanvas() {
-  const { nodes, edges, selected, setNodes, setEdges, setSelected, setNodeDragging, setPanelPosition, undo, redo } = useStore();
+  const { nodes, edges, selected, setNodes, setEdges: setEdgesStore, setSelected, setNodeDragging, setPanelPosition, undo, redo } = useStore();
+  
+  // Wrapper for setEdges that accepts a function
+  const setEdges = useCallback((updater: Edge[] | ((edges: Edge[]) => Edge[])) => {
+    if (typeof updater === 'function') {
+      setEdgesStore(updater(edges));
+    } else {
+      setEdgesStore(updater);
+    }
+  }, [edges, setEdgesStore]);
   const [dropTarget, setDropTarget] = useState(false);
   const [showMiniMap, setShowMiniMap] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -211,6 +222,27 @@ export default function BpmnCanvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onEdgeUpdate={(oldEdge: Edge, newConnection: Connection) => {
+          // Delete the old edge and create a new one
+          setEdges((els: Edge[]) => {
+            const remainingEdges = els.filter((e: Edge) => e.id !== oldEdge.id);
+            const newEdge: Edge = {
+              ...oldEdge,
+              source: newConnection.source || oldEdge.source,
+              target: newConnection.target || oldEdge.target,
+              sourceHandle: newConnection.sourceHandle,
+              targetHandle: newConnection.targetHandle,
+            };
+            return [...remainingEdges, newEdge];
+          });
+        }}
+        onEdgeUpdateStart={() => {
+          // Add a class to handles to increase their z-index during edge update
+          document.body.classList.add('updating-edge');
+        }}
+        onEdgeUpdateEnd={() => {
+          document.body.classList.remove('updating-edge');
+        }}
         onInit={setReactFlowInstance}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -265,14 +297,18 @@ export default function BpmnCanvas() {
           gap={20}
           size={1}
           color={mounted && theme === 'dark' ? '#333333' : '#e5e7eb'}
+          className="!z-[var(--z-background)]"
+          style={{
+            backgroundColor: mounted && theme === 'dark' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.9)'
+          }}
         />
         {/* Title */}
-        <Panel position="top-left" className="left-4 top-4 flex items-center gap-2">
+        <Panel position="top-left" className="left-4 top-4 flex items-center gap-2 !z-[var(--z-interactive)]">
           <Bot className="h-6 w-6 text-gray-600 dark:text-gray-300" />
           <span className="text-xl font-semibold text-gray-600 dark:text-gray-200">BPMN</span>
         </Panel>
         {/* Action buttons */}
-        <Panel position="top-right" className="right-2 top-2 flex gap-1">
+        <Panel position="top-right" className="right-2 top-2 flex gap-1 !z-[var(--z-interactive)]">
           <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -353,7 +389,7 @@ export default function BpmnCanvas() {
           </TooltipProvider>
         </Panel>
         {/* Canvas controls group */}
-        <Panel position="bottom-right" className="right-2 bottom-2">
+        <Panel position="bottom-right" className="right-2 bottom-2 !z-[var(--z-interactive)]">
           <div className="bg-white/50 dark:bg-gray-800/50 rounded-lg shadow-sm flex flex-col gap-2 p-2">
             <Controls 
               showInteractive={false}
@@ -395,7 +431,7 @@ export default function BpmnCanvas() {
         </Panel>
         {/* MiniMap */}
         {showMiniMap && (
-          <Panel position="bottom-right" className="right-[120px] bottom-2">
+          <Panel position="bottom-right" className="right-[120px] bottom-2 !z-[var(--z-interactive)]">
             <div className="bg-white/50 dark:bg-gray-800/50 p-1 rounded-lg shadow-sm">
               <MiniMap
                 nodeColor={(node) => {

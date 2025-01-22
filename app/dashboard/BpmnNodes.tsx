@@ -45,6 +45,7 @@ const eventStyles = {
   fontSize: '12px',
   boxShadow: 'var(--node-shadow, 0 2px 4px rgba(0,0,0,0.1))',
   position: 'relative' as const,
+  zIndex: 'var(--z-event)',
 };
 
 const taskStyles = {
@@ -60,6 +61,7 @@ const taskStyles = {
   border: `2px solid ${colors.task.border}`,
   position: 'relative' as const,
   boxShadow: 'var(--node-shadow, 0 2px 4px rgba(0,0,0,0.1))',
+  zIndex: 'var(--z-activity)',
 };
 
 const gatewayStyles = {
@@ -73,6 +75,7 @@ const gatewayStyles = {
   transform: 'rotate(45deg)',
   border: `2px solid ${colors.gateway.border}`,
   boxShadow: 'var(--node-shadow, 0 2px 4px rgba(0,0,0,0.1))',
+  zIndex: 'var(--z-activity)',
 };
 
 const dataStyles = {
@@ -81,12 +84,14 @@ const dataStyles = {
   border: `2px solid ${colors.data.border}`,
   boxShadow: 'var(--node-shadow, 0 2px 4px rgba(0,0,0,0.1))',
   borderRadius: '4px',
+  zIndex: 'var(--z-data)',
 };
 
 const containerStyles = {
   backgroundColor: colors.container.background,
   border: `1px solid ${colors.container.border}`,
   boxShadow: 'var(--node-shadow, 0 2px 4px rgba(0,0,0,0.1))',
+  zIndex: 'var(--z-background)',
 };
 
 // Event Nodes
