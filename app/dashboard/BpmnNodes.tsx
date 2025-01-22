@@ -1,9 +1,8 @@
 import { memo } from 'react';
-import { Handle, Position } from 'reactflow';
+import { Handle, Position, EdgeProps } from 'reactflow';
+import * as Icons from './BpmnIcons';
 
 // BPMN specification styles
-
-// BPMN 2.0 Specification Colors
 const colors = {
   event: {
     start: '#52bd52',     // Green for start events
@@ -45,6 +44,7 @@ const eventStyles = {
   justifyContent: 'center',
   fontSize: '12px',
   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  position: 'relative' as const,
 };
 
 const taskStyles = {
@@ -75,37 +75,25 @@ const gatewayStyles = {
   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
 };
 
-const poolStyles = {
-  padding: '0',
-  backgroundColor: colors.container.background,
-  width: '800px',
-  minHeight: '200px',
-  border: `1px solid ${colors.container.border}`,
-  display: 'flex',
-  flexDirection: 'column' as const,
-  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-};
-
-const laneStyles = {
-  padding: '0',
-  backgroundColor: colors.container.background,
-  width: '800px',
-  minHeight: '100px',
-  border: `1px solid ${colors.container.border}`,
-  borderTop: 'none',
-  display: 'flex',
-};
-
 const dataStyles = {
+  padding: '8px',
   backgroundColor: colors.data.background,
-  border: `1px solid ${colors.data.border}`,
+  border: `2px solid ${colors.data.border}`,
+  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  borderRadius: '4px',
+};
+
+const containerStyles = {
+  backgroundColor: colors.container.background,
+  border: `1px solid ${colors.container.border}`,
   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
 };
 
+// Event Nodes
 export const StartEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <div style={{ ...eventStyles, border: `2px solid ${colors.event.start}` }}>
-      <div style={{ width: '16px', height: '16px', borderRadius: '50%', backgroundColor: colors.event.start }} />
+      <Icons.StartEventIcon className="w-5 h-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
@@ -115,7 +103,7 @@ export const EndEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={{ ...eventStyles, border: `2px solid ${colors.event.end}` }}>
-      <div style={{ width: '16px', height: '16px', borderRadius: '50%', backgroundColor: colors.event.end }} />
+      <Icons.EndEventIcon className="w-5 h-5" />
     </div>
   </>
 ));
@@ -124,7 +112,7 @@ export const IntermediateThrowEvent = memo(({ data }: { data: { label: string } 
   <>
     <Handle type="target" position={Position.Left} />
     <div style={{ ...eventStyles, border: `2px solid ${colors.event.intermediate}` }}>
-      <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${colors.event.intermediate}` }} />
+      <Icons.MessageEventIcon className="w-5 h-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
@@ -134,7 +122,7 @@ export const IntermediateCatchEvent = memo(({ data }: { data: { label: string } 
   <>
     <Handle type="target" position={Position.Left} />
     <div style={{ ...eventStyles, border: `2px double ${colors.event.intermediate}` }}>
-      <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${colors.event.intermediate}` }} />
+      <Icons.MessageEventIcon className="w-5 h-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
@@ -143,10 +131,8 @@ export const IntermediateCatchEvent = memo(({ data }: { data: { label: string } 
 export const TimerEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
-    <div style={{ ...eventStyles, border: `2px double ${colors.event.intermediate}` }}>
-      <div style={{ width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.event.intermediate }}>
-        ⏰
-      </div>
+    <div style={{ ...eventStyles, border: `2px solid ${colors.event.intermediate}` }}>
+      <Icons.TimerEventIcon className="w-5 h-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
@@ -155,10 +141,8 @@ export const TimerEvent = memo(({ data }: { data: { label: string } }) => (
 export const MessageEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
-    <div style={{ ...eventStyles, border: `2px double ${colors.event.intermediate}` }}>
-      <div style={{ width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.event.intermediate }}>
-        ✉️
-      </div>
+    <div style={{ ...eventStyles, border: `2px solid ${colors.event.intermediate}` }}>
+      <Icons.MessageEventIcon className="w-5 h-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
@@ -167,19 +151,19 @@ export const MessageEvent = memo(({ data }: { data: { label: string } }) => (
 export const SignalEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
-    <div style={{ ...eventStyles, border: `2px double ${colors.event.intermediate}` }}>
-      <div style={{ width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.event.intermediate }}>
-        📡
-      </div>
+    <div style={{ ...eventStyles, border: `2px solid ${colors.event.intermediate}` }}>
+      <Icons.MessageEventIcon className="w-5 h-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
 
+// Task Nodes
 export const Task = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
+      <Icons.TaskIcon className="absolute top-2 left-2 w-5 h-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
@@ -190,7 +174,7 @@ export const UserTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <div className="absolute top-2 left-2">👤</div>
+      <Icons.UserTaskIcon className="absolute top-2 left-2 w-5 h-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
@@ -201,7 +185,7 @@ export const ServiceTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <div className="absolute top-2 left-2">⚙️</div>
+      <Icons.ServiceTaskIcon className="absolute top-2 left-2 w-5 h-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
@@ -212,7 +196,7 @@ export const ScriptTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <div className="absolute top-2 left-2">📜</div>
+      <Icons.ServiceTaskIcon className="absolute top-2 left-2 w-5 h-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
@@ -223,7 +207,7 @@ export const BusinessRuleTask = memo(({ data }: { data: { label: string } }) => 
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <div className="absolute top-2 left-2">📋</div>
+      <Icons.ServiceTaskIcon className="absolute top-2 left-2 w-5 h-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
@@ -234,7 +218,7 @@ export const ManualTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <div className="absolute top-2 left-2">✋</div>
+      <Icons.UserTaskIcon className="absolute top-2 left-2 w-5 h-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
@@ -245,7 +229,7 @@ export const ReceiveTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <div className="absolute top-2 left-2">📥</div>
+      <Icons.MessageEventIcon className="absolute top-2 left-2 w-5 h-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
@@ -256,18 +240,19 @@ export const SendTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <div className="absolute top-2 left-2">📤</div>
+      <Icons.MessageEventIcon className="absolute top-2 left-2 w-5 h-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
 
+// Gateway Nodes
 export const ExclusiveGateway = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={gatewayStyles}>
-      <div style={{ transform: 'rotate(-45deg)' }}>✕</div>
+      <Icons.ExclusiveGatewayIcon className="w-5 h-5 -rotate-45" />
     </div>
     <Handle type="source" position={Position.Right} />
     <Handle type="source" position={Position.Bottom} />
@@ -278,7 +263,7 @@ export const ParallelGateway = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={gatewayStyles}>
-      <div style={{ transform: 'rotate(-45deg)' }}>+</div>
+      <Icons.ParallelGatewayIcon className="w-5 h-5 -rotate-45" />
     </div>
     <Handle type="source" position={Position.Right} />
     <Handle type="source" position={Position.Bottom} />
@@ -289,7 +274,7 @@ export const InclusiveGateway = memo(({ data }: { data: { label: string } }) => 
   <>
     <Handle type="target" position={Position.Left} />
     <div style={gatewayStyles}>
-      <div style={{ transform: 'rotate(-45deg)' }}>O</div>
+      <Icons.ParallelGatewayIcon className="w-5 h-5 -rotate-45" />
     </div>
     <Handle type="source" position={Position.Right} />
     <Handle type="source" position={Position.Bottom} />
@@ -300,7 +285,7 @@ export const EventBasedGateway = memo(({ data }: { data: { label: string } }) =>
   <>
     <Handle type="target" position={Position.Left} />
     <div style={gatewayStyles}>
-      <div style={{ transform: 'rotate(-45deg)' }}>◇</div>
+      <Icons.ExclusiveGatewayIcon className="w-5 h-5 -rotate-45" />
     </div>
     <Handle type="source" position={Position.Right} />
     <Handle type="source" position={Position.Bottom} />
@@ -311,29 +296,20 @@ export const ComplexGateway = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={gatewayStyles}>
-      <div style={{ transform: 'rotate(-45deg)' }}>*</div>
+      <Icons.ExclusiveGatewayIcon className="w-5 h-5 -rotate-45" />
     </div>
     <Handle type="source" position={Position.Right} />
     <Handle type="source" position={Position.Bottom} />
   </>
 ));
 
+// Data Nodes
 export const DataObject = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Top} />
-    <div style={{ ...dataStyles, width: '36px', height: '48px', position: 'relative' }}>
-      <div style={{ 
-        position: 'absolute', 
-        top: '-4px', 
-        right: '-4px', 
-        width: '12px', 
-        height: '12px', 
-        backgroundColor: colors.data.background, 
-        borderTop: `1px solid ${colors.data.border}`, 
-        borderRight: `1px solid ${colors.data.border}`, 
-        transform: 'rotate(45deg)' 
-      }} />
-      <div style={{ padding: '8px', fontSize: '12px' }}>{data.label}</div>
+    <div style={{ ...dataStyles, width: '36px', height: '48px' }}>
+      <Icons.TaskIcon className="w-5 h-5" />
+      {data.label}
     </div>
     <Handle type="source" position={Position.Bottom} />
   </>
@@ -342,102 +318,36 @@ export const DataObject = memo(({ data }: { data: { label: string } }) => (
 export const DataStore = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Top} />
-    <div style={{ ...dataStyles, width: '48px', height: '40px', position: 'relative' }}>
-      <div style={{ 
-        width: '100%', 
-        height: '32px', 
-        border: `1px solid ${colors.data.border}`, 
-        borderRadius: '2px',
-        position: 'relative'
-      }}>
-        <div style={{ 
-          position: 'absolute', 
-          bottom: '-8px', 
-          left: 0, 
-          right: 0, 
-          height: '8px', 
-          borderLeft: `1px solid ${colors.data.border}`,
-          borderRight: `1px solid ${colors.data.border}`,
-          borderBottom: `1px solid ${colors.data.border}`,
-          borderBottomLeftRadius: '2px',
-          borderBottomRightRadius: '2px'
-        }} />
-      </div>
-      <div style={{ padding: '8px', fontSize: '12px' }}>{data.label}</div>
+    <div style={{ ...dataStyles, width: '48px', height: '40px' }}>
+      <Icons.TaskIcon className="w-5 h-5" />
+      {data.label}
     </div>
     <Handle type="source" position={Position.Bottom} />
   </>
 ));
 
+// Container Nodes
 export const Pool = memo(({ data }: { data: { label: string } }) => (
-  <div style={poolStyles}>
+  <div style={{ ...containerStyles, width: '800px', minHeight: '200px' }}>
     <div className="border-b border-gray-300 p-2 font-semibold">{data.label}</div>
   </div>
 ));
 
 export const Lane = memo(({ data }: { data: { label: string } }) => (
-  <div style={laneStyles}>
+  <div style={{ ...containerStyles, width: '800px', minHeight: '100px' }}>
     <div className="border-r border-gray-300 p-2">{data.label}</div>
   </div>
 ));
 
-// Edge types for message flows and associations
-import { EdgeProps } from 'reactflow';
-
-export const MessageFlow = memo(({ id, source, target, ...props }: EdgeProps) => (
+// Edge Types
+export const MessageFlow = memo(({ data }: EdgeProps) => (
   <div className="flex items-center">
-    <div className="w-3 h-3 border-2 border-gray-400 rounded-full" />
-    <div className="flex-1 border-t-2 border-gray-400 border-dashed" />
-    <div className="w-3 h-3 border-2 border-gray-400 rotate-45 transform origin-center" />
-    {props.data?.label && (
-      <div className="absolute w-full text-center -top-6 text-xs">
-        {props.data.label}
-      </div>
-    )}
+    <Icons.ConnectIcon className="w-4 h-4" />
   </div>
 ));
 
-export const Association = memo(({ id, source, target, ...props }: EdgeProps) => (
+export const Association = memo(({ data }: EdgeProps) => (
   <div className="flex items-center">
-    <div className="flex-1 border-t-2 border-gray-400 border-dotted" />
-    {props.data?.label && (
-      <div className="absolute w-full text-center -top-6 text-xs">
-        {props.data.label}
-      </div>
-    )}
+    <Icons.ConnectIcon className="w-4 h-4" />
   </div>
 ));
-
-// Node type mapping for React Flow
-export const nodeTypes = {
-  startEvent: StartEvent,
-  endEvent: EndEvent,
-  intermediateThrowEvent: IntermediateThrowEvent,
-  intermediateCatchEvent: IntermediateCatchEvent,
-  timerEvent: TimerEvent,
-  messageEvent: MessageEvent,
-  signalEvent: SignalEvent,
-  task: Task,
-  userTask: UserTask,
-  serviceTask: ServiceTask,
-  scriptTask: ScriptTask,
-  businessRuleTask: BusinessRuleTask,
-  manualTask: ManualTask,
-  receiveTask: ReceiveTask,
-  sendTask: SendTask,
-  exclusiveGateway: ExclusiveGateway,
-  parallelGateway: ParallelGateway,
-  inclusiveGateway: InclusiveGateway,
-  eventBasedGateway: EventBasedGateway,
-  complexGateway: ComplexGateway,
-  dataObject: DataObject,
-  dataStore: DataStore,
-  pool: Pool,
-  lane: Lane,
-};
-
-// Edge type mapping for React Flow
-export const edgeTypes = {
-  messageFlow: MessageFlow,
-  association: Association,
-};

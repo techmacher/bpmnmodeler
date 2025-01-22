@@ -1,3 +1,4 @@
+import React, { createContext, useContext, useMemo } from 'react';
 import { NodeTypes, EdgeTypes } from 'reactflow';
 import {
   StartEvent,
@@ -28,8 +29,15 @@ import {
   Association,
 } from './BpmnNodes';
 
-// Create a single frozen instance of node types that will be shared across the app
-export const nodeTypes = Object.freeze<NodeTypes>({
+type BpmnContextType = {
+  nodeTypes: NodeTypes;
+  edgeTypes: EdgeTypes;
+};
+
+const BpmnContext = createContext<BpmnContextType | null>(null);
+
+// Base node and edge types that will be memoized
+const baseNodeTypes: NodeTypes = {
   startEvent: StartEvent,
   endEvent: EndEvent,
   intermediateThrowEvent: IntermediateThrowEvent,
@@ -54,10 +62,30 @@ export const nodeTypes = Object.freeze<NodeTypes>({
   dataStore: DataStore,
   pool: Pool,
   lane: Lane,
-});
+};
 
-// Create a single frozen instance of edge types that will be shared across the app
-export const edgeTypes = Object.freeze<EdgeTypes>({
+const baseEdgeTypes: EdgeTypes = {
   messageFlow: MessageFlow,
   association: Association,
-});
+};
+
+export function BpmnProvider({ children }: { children: React.ReactNode }) {
+  const value = useMemo(() => ({
+    nodeTypes: baseNodeTypes,
+    edgeTypes: baseEdgeTypes,
+  }), []);
+
+  return (
+    <BpmnContext.Provider value={value}>
+      {children}
+    </BpmnContext.Provider>
+  );
+}
+
+export function useBpmnTypes() {
+  const context = useContext(BpmnContext);
+  if (!context) {
+    throw new Error('useBpmnTypes must be used within a BpmnProvider');
+  }
+  return context;
+}
