@@ -1,27 +1,13 @@
 'use client';
 
-import ReactFlow from 'reactflow';
-import 'reactflow/dist/style.css';
-import { useStore } from '@/lib/store';
-import BpmnControls from './BpmnControls';
+import BpmnEditor from './BpmnEditor';
 import Chat from 'components/chat';
 
 export default function DashboardPage() {
-  const { nodes, edges } = useStore();
-
   return (
-    <div className="flex h-screen">
-      <div className="flex-1 relative">
-        <ReactFlow 
-          nodes={nodes}
-          edges={edges}
-          fitView
-          nodesDraggable
-          nodesConnectable
-          proOptions={{ hideAttribution: true }}
-        >
-          <BpmnControls />
-        </ReactFlow>
+    <div className="flex h-screen overflow-hidden">
+      <div className="flex-1 relative h-full">
+        <BpmnEditor />
       </div>
       <Chat className="w-96 border-l" />
     </div>

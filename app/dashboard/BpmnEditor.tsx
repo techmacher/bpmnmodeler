@@ -21,7 +21,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useStore } from '@/lib/store';
-import { nodeTypes } from './BpmnNodes';
+import { nodeTypes } from './BpmnNodeTypes';
 import { BpmnProperties } from './BpmnProperties';
 
 // BPMN 2.0 specification nodes

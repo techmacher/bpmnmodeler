@@ -154,7 +154,14 @@ This guide outlines the implementation of a clean, modern BPMN editor that maxim
 - [x] Full-screen canvas implementation
 - [x] Basic BPMN elements (events, tasks, gateways)
 - [ ] Complete BPMN element set:
-  - [x] All event types (intermediate, boundary, etc.)
+  - [x] All event types:
+    - [x] Start Event
+    - [x] End Event
+    - [x] Intermediate Throw Event
+    - [x] Intermediate Catch Event
+    - [x] Timer Event
+    - [x] Message Event
+    - [x] Signal Event
   - [ ] All task types (script, business rule, etc.)
   - [ ] All gateway types (inclusive, event-based, etc.)
   - [ ] Data objects and stores
@@ -200,11 +207,24 @@ This guide outlines the implementation of a clean, modern BPMN editor that maxim
   - [ ] Large diagram handling
   - [ ] Smooth animations
   - [ ] Efficient rendering
+  - [ ] React Flow nodeTypes warning resolution
 - [ ] Accessibility improvements
 - [ ] Mobile/touch support
 - [ ] Documentation
 - [ ] User onboarding
 - [ ] Error handling
+
+### **Known Issues**
+1. **React Flow nodeTypes Warning**
+   - Warning about creating new nodeTypes object on each render
+   - Attempted solutions:
+     - Static nodeTypes object
+     - useMemo hook
+     - Component-level memoization
+   - Next steps:
+     - Investigate React Flow documentation for recommended patterns
+     - Consider using React Flow's built-in memoization utilities
+     - Profile performance impact
 
 ---
 

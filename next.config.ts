@@ -19,6 +19,11 @@ const nextConfig: NextConfig = {
         child_process: false
       };
     }
+    // Add rule to ignore bpmnlintrc files
+    config.module.rules.push({
+      test: /\.bpmnlintrc$/,
+      use: 'ignore-loader'
+    });
     return config;
   },
   serverRuntimeConfig: {
