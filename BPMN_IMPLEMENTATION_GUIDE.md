@@ -292,6 +292,46 @@ This guide outlines the implementation of a clean, modern BPMN editor that maxim
   - [x] UI elements (panels, toolbars)
   - [x] Icons and decorators
 
+### **Phase 2.8: Z-Index Layering System**
+1. **CSS Variable System**
+   - [ ] Define z-index CSS variables:
+     - [ ] --z-background (0-10): Grid, pools, lanes
+     - [ ] --z-data (11-20): Data objects, stores, annotations
+     - [ ] --z-flow (21-30): Sequence flows, message flows
+     - [ ] --z-activity (31-40): Tasks, gateways
+     - [ ] --z-event (41-50): All event types
+     - [ ] --z-boundary (51-60): Boundary events, labels
+     - [ ] --z-interactive (61+): Selection, handles, tooltips
+
+2. **Component Updates**
+   - [ ] Update node components with z-index variables:
+     - [ ] Pool/Lane components (0-10)
+     - [ ] Data elements (11-20)
+     - [ ] Flow edges (21-30)
+     - [ ] Task/Gateway components (31-40)
+     - [ ] Event components (41-50)
+     - [ ] Boundary events (51-60)
+   - [ ] Update interactive elements:
+     - [ ] Selection outlines (61+)
+     - [ ] Resize/connection handles (61+)
+     - [ ] Properties panel (highest)
+     - [ ] Tooltips and overlays (highest)
+
+3. **Theme Integration**
+   - [ ] Add z-index variables to theme system
+   - [ ] Create dark/light theme variants
+
+4. **Validation & Status**
+   - [ ] Add validation indicator layer
+   - [ ] Implement status badge system
+   - [ ] Add error highlight layer
+   - [ ] Position tooltips appropriately
+
+Future Enhancements:
+- High contrast adjustments
+- Theme customization support
+- Advanced z-index controls for custom themes
+
 ### **Next Steps**
 1. **Theme Enhancements**
    - [ ] Add high contrast theme
