@@ -1,0 +1,10 @@
+{
+  "extends": ["bpmnlint:recommended"],
+  "rules": {
+    "label-required": "error",
+    "no-implicit-split": ["error", { "disallowMultipleOutgoing": true }],
+    "single-blank-start-event": "warn",
+    "ai-rules/no-orphaned-ai-suggestions": "error"
+  },
+  "plugins": ["bpmnlint-plugin-ai-rules"]
+}
