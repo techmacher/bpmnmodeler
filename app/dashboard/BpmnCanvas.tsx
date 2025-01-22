@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
+import { BpmnProperties } from './BpmnProperties';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -14,6 +15,7 @@ import ReactFlow, {
   OnEdgesChange,
   applyNodeChanges,
   applyEdgeChanges,
+  OnSelectionChangeParams,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useStore } from '@/lib/store';
@@ -23,12 +25,32 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Map, Save, Download, Upload, Undo, Redo, Bot, Lock } from 'lucide-react';
 
 export default function BpmnCanvas() {
-  const { nodes, edges, setNodes, setEdges } = useStore();
+  const { nodes, edges, selected, setNodes, setEdges, setSelected, undo, redo } = useStore();
   const [dropTarget, setDropTarget] = useState(false);
   const [showMiniMap, setShowMiniMap] = useState(false);
   const [locked, setLocked] = useState(false);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if meta key (Cmd on Mac, Ctrl on Windows) is pressed
+      const isMetaKey = e.metaKey || e.ctrlKey;
+      
+      if (isMetaKey && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   // Get frozen node and edge types from singleton
   const nodeTypes = getNodeTypes();
@@ -110,6 +132,13 @@ export default function BpmnCanvas() {
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
+        onSelectionChange={useCallback(({ nodes: selectedNodes }: OnSelectionChangeParams) => {
+          const selectedIds = selectedNodes?.map((node: Node) => node.id) || [];
+          // Only update if selection actually changed
+          if (JSON.stringify(selectedIds) !== JSON.stringify(selected)) {
+            setSelected(selectedIds);
+          }
+        }, [selected, setSelected])}
         fitView
         proOptions={{ hideAttribution: true }}
       >
@@ -133,13 +162,13 @@ export default function BpmnCanvas() {
                   variant="ghost"
                   size="icon"
                   className="bg-white/75 hover:bg-white/90 shadow-sm"
-                  onClick={() => {/* TODO: Implement undo */}}
+                  onClick={undo}
                 >
                   <Undo className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" align="center">
-                <p className="text-xs">Undo</p>
+                <p className="text-xs">Undo (⌘Z)</p>
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -148,13 +177,13 @@ export default function BpmnCanvas() {
                   variant="ghost"
                   size="icon"
                   className="bg-white/75 hover:bg-white/90 shadow-sm"
-                  onClick={() => {/* TODO: Implement redo */}}
+                  onClick={redo}
                 >
                   <Redo className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" align="center">
-                <p className="text-xs">Redo</p>
+                <p className="text-xs">Redo (⌘⇧Z)</p>
               </TooltipContent>
             </Tooltip>
             <div className="w-px h-4 bg-gray-200 mx-1 self-center" />
@@ -264,6 +293,8 @@ export default function BpmnCanvas() {
             </div>
           </Panel>
         )}
+        {/* Properties Panel */}
+        <BpmnProperties />
       </ReactFlow>
     </div>
   );

@@ -6,6 +6,13 @@ export type DiagramState = {
   edges: Edge[];
 };
 
+export interface PropertiesPanelState {
+  position: { x: number; y: number } | null;
+  offset: { x: number; y: number };
+  isDragging: boolean;
+  activeTab: 'general' | 'advanced' | 'documentation';
+}
+
 interface EditorState {
   nodes: Node[];
   edges: Edge[];
@@ -16,6 +23,7 @@ interface EditorState {
   isMinimized: boolean;
   isMaximized: boolean;
   isExpanded: boolean;
+  propertiesPanel: PropertiesPanelState;
   history: {
     past: DiagramState[];
     future: DiagramState[];
@@ -29,11 +37,21 @@ interface EditorState {
   setMinimized: (minimized: boolean) => void;
   setMaximized: (maximized: boolean) => void;
   setExpanded: (expanded: boolean) => void;
+  setPanelPosition: (position: { x: number; y: number } | null) => void;
+  setPanelOffset: (offset: { x: number; y: number }) => void;
+  setPanelDragging: (isDragging: boolean) => void;
+  setPanelTab: (tab: PropertiesPanelState['activeTab']) => void;
   undo: () => void;
   redo: () => void;
 }
 
 export const useStore = create<EditorState>((set) => ({
+  propertiesPanel: {
+    position: null,
+    offset: { x: 20, y: 0 }, // Default offset from node
+    isDragging: false,
+    activeTab: 'general'
+  },
   nodes: [],
   edges: [],
   selected: [],
@@ -49,27 +67,38 @@ export const useStore = create<EditorState>((set) => ({
   },
   setNodes: (nodes: Node[]) => set((state) => {
     if (state.isLocked) return state;
+    // Only add to history if nodes actually changed
+    const nodesChanged = JSON.stringify(nodes) !== JSON.stringify(state.nodes);
     return {
       nodes,
-      history: {
+      history: nodesChanged ? {
         past: [...state.history.past, { nodes: state.nodes, edges: state.edges }],
         future: []
-      }
+      } : state.history
     };
   }),
   setEdges: (edges: Edge[]) => set((state) => {
     if (state.isLocked) return state;
+    // Only add to history if edges actually changed
+    const edgesChanged = JSON.stringify(edges) !== JSON.stringify(state.edges);
     return {
       edges,
-      history: {
+      history: edgesChanged ? {
         past: [...state.history.past, { nodes: state.nodes, edges: state.edges }],
         future: []
-      }
+      } : state.history
     };
   }),
   setSelected: (selected: string[]) => set((state) => {
     if (state.isLocked) return state;
-    return { selected };
+    // Reset panel position when selection changes
+    return { 
+      selected,
+      propertiesPanel: {
+        ...state.propertiesPanel,
+        position: null // Will be recalculated on render
+      }
+    };
   }),
   setShowGrid: (showGrid: boolean) => set((state) => ({ showGrid })),
   setSnapToGrid: (snapToGrid: boolean) => set((state) => ({ snapToGrid })),
@@ -91,6 +120,24 @@ export const useStore = create<EditorState>((set) => ({
     isExpanded,
     isMinimized: isExpanded ? false : state.isMinimized,
     isMaximized: isExpanded ? false : state.isMaximized 
+  })),
+  setPanelPosition: (position) => set((state) => {
+    // Only update if position actually changed
+    if (JSON.stringify(position) === JSON.stringify(state.propertiesPanel.position)) {
+      return state;
+    }
+    return {
+      propertiesPanel: { ...state.propertiesPanel, position }
+    };
+  }),
+  setPanelOffset: (offset) => set((state) => ({
+    propertiesPanel: { ...state.propertiesPanel, offset }
+  })),
+  setPanelDragging: (isDragging) => set((state) => ({
+    propertiesPanel: { ...state.propertiesPanel, isDragging }
+  })),
+  setPanelTab: (activeTab) => set((state) => ({
+    propertiesPanel: { ...state.propertiesPanel, activeTab }
   })),
   undo: () => set((state) => {
     if (state.history.past.length === 0) return state;
