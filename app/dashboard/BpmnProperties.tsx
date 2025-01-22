@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Node as FlowNode, Panel, useReactFlow, useViewport } from 'reactflow';
-import { nodeTypes } from './BpmnNodeTypes';
+import { Panel, useReactFlow, useViewport } from 'reactflow';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Collapsible from '@radix-ui/react-collapsible';
@@ -8,24 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useStore } from '@/lib/store';
-import type { PropertiesPanelState } from '@/lib/store';
+import type { PropertiesPanelState, BpmnNode, BpmnNodeData } from '@/lib/store';
 import { X } from 'lucide-react';
-
-type BpmnNode = FlowNode<{
-  label?: string;
-  description?: string;
-  condition?: string;
-}>;
 
 interface Position {
   x: number;
   y: number;
-}
-
-interface DragState {
-  isDragging: boolean;
-  startX: number;
-  startY: number;
 }
 
 export function BpmnProperties() {
@@ -36,7 +23,6 @@ export function BpmnProperties() {
   const {
     nodes,
     selected,
-    setNodes,
     propertiesPanel,
     setPanelPosition,
     setPanelOffset,
@@ -55,14 +41,13 @@ export function BpmnProperties() {
     const node = getNode(selectedNode.id);
     if (!node) return null;
 
-    // Calculate position relative to viewport
-    const nodeX = (node.position.x + (node.width || 0)) * viewport.zoom + viewport.x;
+    // Calculate position relative to node with viewport transform
+    const nodeX = (node.position.x + (node.width || 0)) * viewport.zoom + viewport.x + 20;
     const nodeY = node.position.y * viewport.zoom + viewport.y;
     
-    // Add default offset
     return {
-      x: nodeX + propertiesPanel.offset.x,
-      y: nodeY + propertiesPanel.offset.y
+      x: nodeX,
+      y: nodeY
     };
   }, [selectedNode, viewport, getNode, propertiesPanel.offset]);
 
@@ -111,44 +96,13 @@ export function BpmnProperties() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [selected, propertiesPanel.isDragging, setSelected]);
 
-  // Update handlers
-  const updateNodeLabel = useCallback(
-    (newLabel: string) => {
+  // Update handler
+  const updateNodeData = useCallback(
+    (data: Partial<BpmnNodeData>) => {
       if (!selectedNode) return;
-      const updatedNodes = nodes.map((node) =>
-        node.id === selectedNode.id
-          ? { ...node, data: { ...node.data, label: newLabel } }
-          : node
-      );
-      setNodes(updatedNodes);
+      useStore.getState().updateNodeData(selectedNode.id, data);
     },
-    [selectedNode, nodes, setNodes]
-  );
-
-  const updateNodeDescription = useCallback(
-    (newDescription: string) => {
-      if (!selectedNode) return;
-      const updatedNodes = nodes.map((node) =>
-        node.id === selectedNode.id
-          ? { ...node, data: { ...node.data, description: newDescription } }
-          : node
-      );
-      setNodes(updatedNodes);
-    },
-    [selectedNode, nodes, setNodes]
-  );
-
-  const updateNodeCondition = useCallback(
-    (newCondition: string) => {
-      if (!selectedNode) return;
-      const updatedNodes = nodes.map((node) =>
-        node.id === selectedNode.id
-          ? { ...node, data: { ...node.data, condition: newCondition } }
-          : node
-      );
-      setNodes(updatedNodes);
-    },
-    [selectedNode, nodes, setNodes]
+    [selectedNode]
   );
 
   if (!selectedNode) return null;
@@ -193,20 +147,26 @@ export function BpmnProperties() {
             
             const handlePointerMove = (e: PointerEvent) => {
               const newPosition = {
-                x: e.clientX - startX,
-                y: e.clientY - startY
+                x: (e.clientX - startX) / viewport.zoom,
+                y: (e.clientY - startY) / viewport.zoom
               };
-              setDragPosition(newPosition);
+              setDragPosition({
+                x: newPosition.x * viewport.zoom + viewport.x,
+                y: newPosition.y * viewport.zoom + viewport.y
+              });
               e.preventDefault();
             };
             
             const handlePointerUp = (e: PointerEvent) => {
               setPanelDragging(false);
               const finalPosition = {
-                x: e.clientX - startX,
-                y: e.clientY - startY
+                x: (e.clientX - startX) / viewport.zoom,
+                y: (e.clientY - startY) / viewport.zoom
               };
-              setPanelPosition(finalPosition);
+              setPanelPosition({
+                x: finalPosition.x * viewport.zoom + viewport.x,
+                y: finalPosition.y * viewport.zoom + viewport.y
+              });
               setDragPosition(null);
               window.removeEventListener('pointermove', handlePointerMove);
               window.removeEventListener('pointerup', handlePointerUp);
@@ -218,16 +178,16 @@ export function BpmnProperties() {
             e.preventDefault();
           }}
         >
-          <Card className="w-[300px] shadow-lg bg-white/90 backdrop-blur">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-medium">
+          <Card className="w-[300px] shadow-lg bg-white/95 dark:bg-gray-900/95 backdrop-blur border border-gray-200 dark:border-gray-700">
+            <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b border-gray-200 dark:border-gray-700">
+              <CardTitle className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {displayName} Properties
               </CardTitle>
               <button
                 onClick={() => setSelected([])}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors no-drag"
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors no-drag"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4 text-gray-500 dark:text-gray-400" />
               </button>
             </CardHeader>
             <CardContent>
@@ -235,63 +195,203 @@ export function BpmnProperties() {
                 value={propertiesPanel.activeTab}
                 onValueChange={(value: string) => setPanelTab(value as PropertiesPanelState['activeTab'])}
               >
-                <Tabs.List className="flex space-x-2 border-b mb-4">
+                <Tabs.List className="flex space-x-1 border-b border-gray-200 dark:border-gray-700 mb-4 px-1">
                   <Tabs.Trigger
                     value="general"
-                    className="px-3 py-1.5 text-sm text-gray-600 border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 no-drag"
+                    className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 transition-colors no-drag"
                   >
                     General
                   </Tabs.Trigger>
                   <Tabs.Trigger
                     value="advanced"
-                    className="px-3 py-1.5 text-sm text-gray-600 border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 no-drag"
+                    className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 transition-colors no-drag"
                   >
                     Advanced
                   </Tabs.Trigger>
                   <Tabs.Trigger
                     value="documentation"
-                    className="px-3 py-1.5 text-sm text-gray-600 border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 no-drag"
+                    className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 transition-colors no-drag"
                   >
                     Docs
                   </Tabs.Trigger>
                 </Tabs.List>
 
                 <Tabs.Content value="general" className="space-y-4">
+                  {/* Common Properties */}
                   <div className="space-y-2">
-                    <Label htmlFor="label">Label</Label>
+                    <Label htmlFor="label" className="text-sm font-medium text-gray-700 dark:text-gray-300">Label</Label>
                     <div className="no-drag">
                       <Input
                         id="label"
                         value={selectedNode.data.label || ''}
-                        onChange={(e) => updateNodeLabel(e.target.value)}
+                        onChange={(e) => updateNodeData({ label: e.target.value })}
                         placeholder="Enter label"
+                        className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
                   </div>
 
-                  {selectedNode.type === 'task' && (
+                  {/* Event Properties */}
+                  {selectedNode.type?.toLowerCase().includes('event') && (
                     <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
-                      <div className="no-drag">
-                        <Input
-                          id="description"
-                          value={selectedNode.data.description || ''}
-                          onChange={(e) => updateNodeDescription(e.target.value)}
-                          placeholder="Enter task description"
-                        />
+                      <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Event Configuration</Label>
+                      <div className="no-drag space-y-2">
+                        {selectedNode.type === 'timerEvent' && (
+                          <>
+                            <Label htmlFor="timerType">Timer Type</Label>
+                            <select
+                              id="timerType"
+                              className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              value={selectedNode.data.timerType || 'date'}
+                              onChange={(e) => updateNodeData({ timerType: e.target.value as BpmnNodeData['timerType'] })}
+                            >
+                              <option value="date">Date</option>
+                              <option value="duration">Duration</option>
+                              <option value="cycle">Cycle</option>
+                            </select>
+                            <Input
+                              value={selectedNode.data.timerExpression || ''}
+                              onChange={(e) => updateNodeData({ timerExpression: e.target.value })}
+                              placeholder="Timer Expression"
+                              className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
+                            />
+                          </>
+                        )}
+                        {selectedNode.type === 'messageEvent' && (
+                          <>
+                            <Input
+                              value={selectedNode.data.messageName || ''}
+                              onChange={(e) => updateNodeData({ messageName: e.target.value })}
+                              placeholder="Message Name"
+                              className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            <Input
+                              value={selectedNode.data.correlationKey || ''}
+                              onChange={(e) => updateNodeData({ correlationKey: e.target.value })}
+                              placeholder="Correlation Key"
+                              className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
+                            />
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
 
-                  {selectedNode.type === 'gateway' && (
+                  {/* Task Properties */}
+                  {selectedNode.type?.toLowerCase().includes('task') && (
                     <div className="space-y-2">
-                      <Label htmlFor="condition">Condition</Label>
-                      <div className="no-drag">
+                      <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Task Configuration</Label>
+                      <div className="no-drag space-y-2">
                         <Input
-                          id="condition"
+                          value={selectedNode.data.description || ''}
+                          onChange={(e) => updateNodeData({ description: e.target.value })}
+                          placeholder="Description"
+                          className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        {selectedNode.type === 'userTask' && (
+                          <>
+                            <Input
+                              value={selectedNode.data.assignee || ''}
+                              onChange={(e) => updateNodeData({ assignee: e.target.value })}
+                              placeholder="Assignee"
+                              className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            <Input
+                              value={selectedNode.data.dueDate || ''}
+                              onChange={(e) => updateNodeData({ dueDate: e.target.value })}
+                              placeholder="Due Date"
+                              type="date"
+                              className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            <select
+                              className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              value={selectedNode.data.priority || 'medium'}
+                              onChange={(e) => updateNodeData({ priority: e.target.value as BpmnNodeData['priority'] })}
+                            >
+                              <option value="low">Low Priority</option>
+                              <option value="medium">Medium Priority</option>
+                              <option value="high">High Priority</option>
+                            </select>
+                          </>
+                        )}
+                        {selectedNode.type === 'serviceTask' && (
+                          <>
+                            <Input
+                              value={selectedNode.data.implementation || ''}
+                              onChange={(e) => updateNodeData({ implementation: e.target.value })}
+                              placeholder="Implementation"
+                              className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            <Input
+                              value={selectedNode.data.operation || ''}
+                              onChange={(e) => updateNodeData({ operation: e.target.value })}
+                              placeholder="Operation"
+                              className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </>
+                        )}
+                        {selectedNode.type === 'scriptTask' && (
+                          <>
+                            <select
+                              className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              value={selectedNode.data.scriptFormat || 'javascript'}
+                              onChange={(e) => updateNodeData({ scriptFormat: e.target.value })}
+                            >
+                              <option value="javascript">JavaScript</option>
+                              <option value="python">Python</option>
+                              <option value="groovy">Groovy</option>
+                            </select>
+                            <textarea
+                              className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+                              value={selectedNode.data.scriptContent || ''}
+                              onChange={(e) => updateNodeData({ scriptContent: e.target.value })}
+                              placeholder="Script Content"
+                            />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Gateway Properties */}
+                  {selectedNode.type?.toLowerCase().includes('gateway') && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Gateway Configuration</Label>
+                      <div className="no-drag space-y-2">
+                        <Input
                           value={selectedNode.data.condition || ''}
-                          onChange={(e) => updateNodeCondition(e.target.value)}
-                          placeholder="Enter gateway condition"
+                          onChange={(e) => updateNodeData({ condition: e.target.value })}
+                          placeholder="Condition Expression"
+                          className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <select
+                          className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          value={selectedNode.data.gatewayDirection || 'diverging'}
+                          onChange={(e) => updateNodeData({ gatewayDirection: e.target.value as BpmnNodeData['gatewayDirection'] })}
+                        >
+                          <option value="diverging">Diverging</option>
+                          <option value="converging">Converging</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Data Object/Store Properties */}
+                  {(selectedNode.type === 'dataObject' || selectedNode.type === 'dataStore') && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Data Configuration</Label>
+                      <div className="no-drag space-y-2">
+                        <Input
+                          value={selectedNode.data.dataStructure || ''}
+                          onChange={(e) => updateNodeData({ dataStructure: e.target.value })}
+                          placeholder="Data Structure"
+                          className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <textarea
+                          className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+                          value={selectedNode.data.dataSchema || ''}
+                          onChange={(e) => updateNodeData({ dataSchema: e.target.value })}
+                          placeholder="Data Schema"
                         />
                       </div>
                     </div>
@@ -317,7 +417,9 @@ export function BpmnProperties() {
                     <div className="no-drag">
                       <textarea
                         id="documentation"
-                        className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+                        value={selectedNode.data.documentation || ''}
+                        onChange={(e) => updateNodeData({ documentation: e.target.value })}
                         placeholder="Add documentation..."
                       />
                     </div>
