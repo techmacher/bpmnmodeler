@@ -1,0 +1,310 @@
+# BPMN Modeler Integration Guide
+
+This guide explains how to integrate **bpmn-js** into the [Vercel AI Chatbot](https://github.com/vercel/ai-chatbot) template and ensure the interface works like the provided screenshot.
+
+## Core Features
+
+1. **Left Sidebar Navigation**
+   - New chat button
+   - Chat history with associated diagrams
+   - Template categories
+
+2. **Chat-Diagram Integration**
+   - Each chat is automatically associated with a new diagram
+   - Chat history shows diagram names
+   - Ability to rename chats/diagrams
+   - Delete chat and associated diagram together
+
+3. **BPMN Viewer/Modeler**
+   - Interactive diagram editor
+   - Expand to full-screen mode
+   - Export capabilities:
+     - Download as image
+     - Export as .bpmn
+     - Fit to view
+   - Size controls (small/medium/large)
+
+4. **AI Integration**
+   - Generate new diagrams
+   - Modify existing diagrams
+   - Real-time updates
+
+## Implementation Steps
+
+### 1. Project Setup
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/bpmn-dashboard
+```
+
+### 2. Database Schema
+
+Add tables for chat-diagram association:
+
+```typescript
+// lib/db/schema.ts
+
+export const chats = pgTable('chats', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  userId: text('user_id').notNull(),
+  diagramId: text('diagram_id').references(() => diagrams.id, { onDelete: 'cascade' })
+});
+
+export const diagrams = pgTable('diagrams', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  xml: text('xml').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  userId: text('user_id').notNull()
+});
+```
+
+### 3. Chat-Diagram Management
+
+1. **Create New Chat with Diagram**:
+```typescript
+// lib/db/queries.ts
+
+export async function createChatWithDiagram({ 
+  userId, 
+  title 
+}: { 
+  userId: string; 
+  title: string; 
+}) {
+  const diagramId = generateUUID();
+  const chatId = generateUUID();
+
+  await db.transaction(async (tx) => {
+    // Create diagram with default BPMN XML
+    await tx.insert(diagrams).values({
+      id: diagramId,
+      name: title,
+      xml: defaultBpmnXml,
+      userId
+    });
+
+    // Create chat linked to diagram
+    await tx.insert(chats).values({
+      id: chatId,
+      title,
+      userId,
+      diagramId
+    });
+  });
+
+  return { chatId, diagramId };
+}
+```
+
+2. **Rename Chat/Diagram**:
+```typescript
+export async function renameChatAndDiagram({
+  chatId,
+  newTitle
+}: {
+  chatId: string;
+  newTitle: string;
+}) {
+  const chat = await db.query.chats.findFirst({
+    where: eq(chats.id, chatId)
+  });
+
+  if (!chat?.diagramId) return;
+
+  await db.transaction(async (tx) => {
+    await tx.update(chats)
+      .set({ title: newTitle })
+      .where(eq(chats.id, chatId));
+
+    await tx.update(diagrams)
+      .set({ name: newTitle })
+      .where(eq(diagrams.id, chat.diagramId));
+  });
+}
+```
+
+3. **Delete Chat and Diagram**:
+```typescript
+export async function deleteChatAndDiagram(chatId: string) {
+  // Diagram will be cascade deleted due to foreign key constraint
+  await db.delete(chats).where(eq(chats.id, chatId));
+}
+```
+
+### 4. UI Components
+
+1. **Sidebar with Chat History**:
+```tsx
+// components/chat-sidebar.tsx
+
+export function ChatSidebar() {
+  const { data: chats } = useSWR('/api/chats', fetcher);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  return (
+    <aside className="w-64 bg-gray-900 text-white">
+      <div className="p-4">
+        <button 
+          onClick={createNewChat}
+          className="w-full bg-blue-600 text-white rounded-lg py-2"
+        >
+          New chat
+        </button>
+      </div>
+      
+      <div className="px-4">
+        <h3 className="text-sm font-medium text-gray-400">Recent</h3>
+        {chats?.map(chat => (
+          <div key={chat.id} className="flex items-center group">
+            <Link href={`/chat/${chat.id}`} className="flex-1 py-2 text-sm">
+              {editingId === chat.id ? (
+                <input
+                  autoFocus
+                  value={chat.title}
+                  onChange={e => handleRename(chat.id, e.target.value)}
+                  onBlur={() => setEditingId(null)}
+                  className="bg-gray-800 px-2 py-1 rounded w-full"
+                />
+              ) : (
+                <span>{chat.title}</span>
+              )}
+            </Link>
+            <button
+              onClick={() => setEditingId(chat.id)}
+              className="opacity-0 group-hover:opacity-100"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={() => deleteChat(chat.id)}
+              className="opacity-0 group-hover:opacity-100 ml-2"
+            >
+              🗑️
+            </button>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+```
+
+2. **Expand to Full Screen**:
+```tsx
+// components/diagram-viewer.tsx
+
+export function DiagramViewer({ diagramId }: { diagramId: string }) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  return (
+    <div className={isFullscreen ? 'fixed inset-0 z-50' : 'relative flex-1'}>
+      <button
+        onClick={() => setIsFullscreen(!isFullscreen)}
+        className="absolute top-4 right-4 z-10"
+      >
+        {isFullscreen ? 'Exit Fullscreen' : 'Expand'}
+      </button>
+      
+      <div ref={diagramContainerRef} className="h-full">
+        {/* BPMN viewer */}
+      </div>
+      
+      <BpmnControls
+        modelerRef={modelerRef}
+        className="absolute bottom-4 left-1/2 transform -translate-x-1/2"
+      />
+    </div>
+  );
+}
+```
+
+### 5. API Routes
+
+1. **Chat Management**:
+```typescript
+// app/api/chat/route.ts
+
+export async function POST(request: Request) {
+  const { title } = await request.json();
+  const { chatId, diagramId } = await createChatWithDiagram({
+    userId: 'user-id', // Get from auth
+    title
+  });
+  return Response.json({ chatId, diagramId });
+}
+
+export async function PATCH(request: Request) {
+  const { chatId, title } = await request.json();
+  await renameChatAndDiagram({ chatId, title });
+  return Response.json({ success: true });
+}
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const chatId = searchParams.get('id');
+  if (!chatId) return Response.json({ error: 'Chat ID required' }, { status: 400 });
+  
+  await deleteChatAndDiagram(chatId);
+  return Response.json({ success: true });
+}
+```
+
+### 6. Testing
+
+1. **Create New Chat**:
+   - Click "New chat"
+   - Verify new diagram is created
+   - Check chat appears in sidebar
+
+2. **Rename Chat**:
+   - Click edit icon on chat
+   - Enter new name
+   - Verify both chat and diagram names update
+
+3. **Delete Chat**:
+   - Click delete icon
+   - Verify both chat and diagram are removed
+
+4. **Expand Diagram**:
+   - Click expand button
+   - Verify full-screen mode
+   - Test diagram controls still work
+   - Exit full-screen
+
+5. **Export Functions**:
+   - Test "Download as image"
+   - Test "Export as .bpmn"
+   - Verify files are correct format
+
+### 7. Deployment
+
+1. **Database Migrations**:
+```bash
+npm run db:migrate
+```
+
+2. **Environment Variables**:
+```env
+DATABASE_URL="postgresql://..."
+```
+
+3. **Deploy**:
+```bash
+git push origin feature/bpmn-dashboard
+# Create PR and merge
+```
+
+## Final Notes
+
+- Each chat automatically creates and maintains its own diagram
+- Diagrams are saved in the database as XML
+- All operations (rename, delete) affect both chat and diagram
+- Full-screen mode preserves all diagram functionality
+- Export options are always accessible
+
+This implementation ensures a tight integration between chats and diagrams while maintaining a clean, professional interface that matches the reference screenshot.

@@ -1,0 +1,3439 @@
+File: /workspaces/bpmnmodeler/lib/editor/diff.js
+// Modified from https://github.com/hamflx/prosemirror-diff/blob/master/src/diff.js
+
+import { diff_match_patch } from 'diff-match-patch';
+import { Fragment, Node } from 'prosemirror-model';
+
+export const DiffType = {
+  Unchanged: 0,
+  Deleted: -1,
+  Inserted: 1,
+};
+
+export const patchDocumentNode = (schema, oldNode, newNode) => {
+  assertNodeTypeEqual(oldNode, newNode);
+
+  const finalLeftChildren = [];
+  const finalRightChildren = [];
+
+  const oldChildren = normalizeNodeContent(oldNode);
+  const newChildren = normalizeNodeContent(newNode);
+  const oldChildLen = oldChildren.length;
+  const newChildLen = newChildren.length;
+  const minChildLen = Math.min(oldChildLen, newChildLen);
+
+  let left = 0;
+  let right = 0;
+
+  for (; left < minChildLen; left++) {
+    const oldChild = oldChildren[left];
+    const newChild = newChildren[left];
+    if (!isNodeEqual(oldChild, newChild)) {
+      break;
+    }
+    finalLeftChildren.push(...ensureArray(oldChild));
+  }
+
+  for (; right + left + 1 < minChildLen; right++) {
+    const oldChild = oldChildren[oldChildLen - right - 1];
+    const newChild = newChildren[newChildLen - right - 1];
+    if (!isNodeEqual(oldChild, newChild)) {
+      break;
+    }
+    finalRightChildren.unshift(...ensureArray(oldChild));
+  }
+
+  const diffOldChildren = oldChildren.slice(left, oldChildLen - right);
+  const diffNewChildren = newChildren.slice(left, newChildLen - right);
+
+  if (diffOldChildren.length && diffNewChildren.length) {
+    const matchedNodes = matchNodes(
+      schema,
+      diffOldChildren,
+      diffNewChildren,
+    ).sort((a, b) => b.count - a.count);
+    const bestMatch = matchedNodes[0];
+    if (bestMatch) {
+      const { oldStartIndex, newStartIndex, oldEndIndex, newEndIndex } =
+        bestMatch;
+      const oldBeforeMatchChildren = diffOldChildren.slice(0, oldStartIndex);
+      const newBeforeMatchChildren = diffNewChildren.slice(0, newStartIndex);
+
+      finalLeftChildren.push(
+        ...patchRemainNodes(
+          schema,
+          oldBeforeMatchChildren,
+          newBeforeMatchChildren,
+        ),
+      );
+      finalLeftChildren.push(
+        ...diffOldChildren.slice(oldStartIndex, oldEndIndex),
+      );
+
+      const oldAfterMatchChildren = diffOldChildren.slice(oldEndIndex);
+      const newAfterMatchChildren = diffNewChildren.slice(newEndIndex);
+
+      finalRightChildren.unshift(
+        ...patchRemainNodes(
+          schema,
+          oldAfterMatchChildren,
+          newAfterMatchChildren,
+        ),
+      );
+    } else {
+      finalLeftChildren.push(
+        ...patchRemainNodes(schema, diffOldChildren, diffNewChildren),
+      );
+    }
+  } else {
+    finalLeftChildren.push(
+      ...patchRemainNodes(schema, diffOldChildren, diffNewChildren),
+    );
+  }
+
+  return createNewNode(oldNode, [...finalLeftChildren, ...finalRightChildren]);
+};
+
+const matchNodes = (schema, oldChildren, newChildren) => {
+  const matches = [];
+  for (
+    let oldStartIndex = 0;
+    oldStartIndex < oldChildren.length;
+    oldStartIndex++
+  ) {
+    const oldStartNode = oldChildren[oldStartIndex];
+    const newStartIndex = findMatchNode(newChildren, oldStartNode);
+
+    if (newStartIndex !== -1) {
+      let oldEndIndex = oldStartIndex + 1;
+      let newEndIndex = newStartIndex + 1;
+      for (
+        ;
+        oldEndIndex < oldChildren.length && newEndIndex < newChildren.length;
+        oldEndIndex++, newEndIndex++
+      ) {
+        const oldEndNode = oldChildren[oldEndIndex];
+        if (!isNodeEqual(newChildren[newEndIndex], oldEndNode)) {
+          break;
+        }
+      }
+      matches.push({
+        oldStartIndex,
+        newStartIndex,
+        oldEndIndex,
+        newEndIndex,
+        count: newEndIndex - newStartIndex,
+      });
+    }
+  }
+  return matches;
+};
+
+const findMatchNode = (children, node, startIndex = 0) => {
+  for (let i = startIndex; i < children.length; i++) {
+    if (isNodeEqual(children[i], node)) {
+      return i;
+    }
+  }
+  return -1;
+};
+
+const patchRemainNodes = (schema, oldChildren, newChildren) => {
+  const finalLeftChildren = [];
+  const finalRightChildren = [];
+  const oldChildLen = oldChildren.length;
+  const newChildLen = newChildren.length;
+  let left = 0;
+  let right = 0;
+  while (oldChildLen - left - right > 0 && newChildLen - left - right > 0) {
+    const leftOldNode = oldChildren[left];
+    const leftNewNode = newChildren[left];
+    const rightOldNode = oldChildren[oldChildLen - right - 1];
+    const rightNewNode = newChildren[newChildLen - right - 1];
+    let updateLeft =
+      !isTextNode(leftOldNode) && matchNodeType(leftOldNode, leftNewNode);
+    let updateRight =
+      !isTextNode(rightOldNode) && matchNodeType(rightOldNode, rightNewNode);
+    if (Array.isArray(leftOldNode) && Array.isArray(leftNewNode)) {
+      finalLeftChildren.push(
+        ...patchTextNodes(schema, leftOldNode, leftNewNode),
+      );
+      left += 1;
+      continue;
+    }
+
+    if (updateLeft && updateRight) {
+      const equalityLeft = computeChildEqualityFactor(leftOldNode, leftNewNode);
+      const equalityRight = computeChildEqualityFactor(
+        rightOldNode,
+        rightNewNode,
+      );
+      if (equalityLeft < equalityRight) {
+        updateLeft = false;
+      } else {
+        updateRight = false;
+      }
+    }
+    if (updateLeft) {
+      finalLeftChildren.push(
+        patchDocumentNode(schema, leftOldNode, leftNewNode),
+      );
+      left += 1;
+    } else if (updateRight) {
+      finalRightChildren.unshift(
+        patchDocumentNode(schema, rightOldNode, rightNewNode),
+      );
+      right += 1;
+    } else {
+      // Delete and insert
+      finalLeftChildren.push(
+        createDiffNode(schema, leftOldNode, DiffType.Deleted),
+      );
+      finalLeftChildren.push(
+        createDiffNode(schema, leftNewNode, DiffType.Inserted),
+      );
+      left += 1;
+    }
+  }
+
+  const deleteNodeLen = oldChildLen - left - right;
+  const insertNodeLen = newChildLen - left - right;
+  if (deleteNodeLen) {
+    finalLeftChildren.push(
+      ...oldChildren
+        .slice(left, left + deleteNodeLen)
+        .flat()
+        .map((node) => createDiffNode(schema, node, DiffType.Deleted)),
+    );
+  }
+
+  if (insertNodeLen) {
+    finalRightChildren.unshift(
+      ...newChildren
+        .slice(left, left + insertNodeLen)
+        .flat()
+        .map((node) => createDiffNode(schema, node, DiffType.Inserted)),
+    );
+  }
+
+  return [...finalLeftChildren, ...finalRightChildren];
+};
+
+// Updated function to perform sentence-level diffs
+export const patchTextNodes = (schema, oldNode, newNode) => {
+  const dmp = new diff_match_patch();
+
+  // Concatenate the text from the text nodes
+  const oldText = oldNode.map((n) => getNodeText(n)).join('');
+  const newText = newNode.map((n) => getNodeText(n)).join('');
+
+  // Tokenize the text into sentences
+  const oldSentences = tokenizeSentences(oldText);
+  const newSentences = tokenizeSentences(newText);
+
+  // Map sentences to unique characters
+  const { chars1, chars2, lineArray } = sentencesToChars(
+    oldSentences,
+    newSentences,
+  );
+
+  // Perform the diff
+  let diffs = dmp.diff_main(chars1, chars2, false);
+
+  // Convert back to sentences
+  diffs = diffs.map(([type, text]) => {
+    const sentences = text
+      .split('')
+      .map((char) => lineArray[char.charCodeAt(0)]);
+    return [type, sentences];
+  });
+
+  // Map diffs to nodes
+  const res = diffs.flatMap(([type, sentences]) => {
+    return sentences.map((sentence) => {
+      const node = createTextNode(
+        schema,
+        sentence,
+        type !== DiffType.Unchanged ? [createDiffMark(schema, type)] : [],
+      );
+      return node;
+    });
+  });
+
+  return res;
+};
+
+// Function to tokenize text into sentences
+const tokenizeSentences = (text) => {
+  return text.match(/[^.!?]+[.!?]*\s*/g) || [];
+};
+
+// Function to map sentences to unique characters
+const sentencesToChars = (oldSentences, newSentences) => {
+  const lineArray = [];
+  const lineHash = {};
+  let lineStart = 0;
+
+  const chars1 = oldSentences
+    .map((sentence) => {
+      const line = sentence;
+      if (line in lineHash) {
+        return String.fromCharCode(lineHash[line]);
+      }
+      lineHash[line] = lineStart;
+      lineArray[lineStart] = line;
+      lineStart++;
+      return String.fromCharCode(lineHash[line]);
+    })
+    .join('');
+
+  const chars2 = newSentences
+    .map((sentence) => {
+      const line = sentence;
+      if (line in lineHash) {
+        return String.fromCharCode(lineHash[line]);
+      }
+      lineHash[line] = lineStart;
+      lineArray[lineStart] = line;
+      lineStart++;
+      return String.fromCharCode(lineHash[line]);
+    })
+    .join('');
+
+  return { chars1, chars2, lineArray };
+};
+
+export const computeChildEqualityFactor = (node1, node2) => {
+  return 0;
+};
+
+export const assertNodeTypeEqual = (node1, node2) => {
+  if (getNodeProperty(node1, 'type') !== getNodeProperty(node2, 'type')) {
+    throw new Error(`node type not equal: ${node1.type} !== ${node2.type}`);
+  }
+};
+
+export const ensureArray = (value) => {
+  return Array.isArray(value) ? value : [value];
+};
+
+export const isNodeEqual = (node1, node2) => {
+  const isNode1Array = Array.isArray(node1);
+  const isNode2Array = Array.isArray(node2);
+  if (isNode1Array !== isNode2Array) {
+    return false;
+  }
+  if (isNode1Array) {
+    return (
+      node1.length === node2.length &&
+      node1.every((node, index) => isNodeEqual(node, node2[index]))
+    );
+  }
+
+  const type1 = getNodeProperty(node1, 'type');
+  const type2 = getNodeProperty(node2, 'type');
+  if (type1 !== type2) {
+    return false;
+  }
+  if (isTextNode(node1)) {
+    const text1 = getNodeProperty(node1, 'text');
+    const text2 = getNodeProperty(node2, 'text');
+    if (text1 !== text2) {
+      return false;
+    }
+  }
+  const attrs1 = getNodeAttributes(node1);
+  const attrs2 = getNodeAttributes(node2);
+  const attrs = [...new Set([...Object.keys(attrs1), ...Object.keys(attrs2)])];
+  for (const attr of attrs) {
+    if (attrs1[attr] !== attrs2[attr]) {
+      return false;
+    }
+  }
+  const marks1 = getNodeMarks(node1);
+  const marks2 = getNodeMarks(node2);
+  if (marks1.length !== marks2.length) {
+    return false;
+  }
+  for (let i = 0; i < marks1.length; i++) {
+    if (!isNodeEqual(marks1[i], marks2[i])) {
+      return false;
+    }
+  }
+  const children1 = getNodeChildren(node1);
+  const children2 = getNodeChildren(node2);
+  if (children1.length !== children2.length) {
+    return false;
+  }
+  for (let i = 0; i < children1.length; i++) {
+    if (!isNodeEqual(children1[i], children2[i])) {
+      return false;
+    }
+  }
+  return true;
+};
+
+export const normalizeNodeContent = (node) => {
+  const content = getNodeChildren(node) ?? [];
+  const res = [];
+  for (let i = 0; i < content.length; i++) {
+    const child = content[i];
+    if (isTextNode(child)) {
+      const textNodes = [];
+      for (
+        let textNode = content[i];
+        i < content.length && isTextNode(textNode);
+        textNode = content[++i]
+      ) {
+        textNodes.push(textNode);
+      }
+      i--;
+      res.push(textNodes);
+    } else {
+      res.push(child);
+    }
+  }
+  return res;
+};
+
+export const getNodeProperty = (node, property) => {
+  if (property === 'type') {
+    return node.type?.name;
+  }
+  return node[property];
+};
+
+export const getNodeAttribute = (node, attribute) =>
+  node.attrs ? node.attrs[attribute] : undefined;
+
+export const getNodeAttributes = (node) => (node.attrs ? node.attrs : {});
+
+export const getNodeMarks = (node) => node.marks ?? [];
+
+export const getNodeChildren = (node) => node.content?.content ?? [];
+
+export const getNodeText = (node) => node.text;
+
+export const isTextNode = (node) => node.type?.name === 'text';
+
+export const matchNodeType = (node1, node2) =>
+  node1.type?.name === node2.type?.name ||
+  (Array.isArray(node1) && Array.isArray(node2));
+
+export const createNewNode = (oldNode, children) => {
+  if (!oldNode.type) {
+    throw new Error('oldNode.type is undefined');
+  }
+  return new Node(
+    oldNode.type,
+    oldNode.attrs,
+    Fragment.fromArray(children),
+    oldNode.marks,
+  );
+};
+
+export const createDiffNode = (schema, node, type) => {
+  return mapDocumentNode(node, (node) => {
+    if (isTextNode(node)) {
+      return createTextNode(schema, getNodeText(node), [
+        ...(node.marks || []),
+        createDiffMark(schema, type),
+      ]);
+    }
+    return node;
+  });
+};
+
+function mapDocumentNode(node, mapper) {
+  const copy = node.copy(
+    Fragment.from(
+      node.content.content
+        .map((node) => mapDocumentNode(node, mapper))
+        .filter((n) => n),
+    ),
+  );
+  return mapper(copy) || copy;
+}
+
+export const createDiffMark = (schema, type) => {
+  if (type === DiffType.Inserted) {
+    return schema.mark('diffMark', { type });
+  }
+  if (type === DiffType.Deleted) {
+    return schema.mark('diffMark', { type });
+  }
+  throw new Error('type is not valid');
+};
+
+export const createTextNode = (schema, content, marks = []) => {
+  return schema.text(content, marks);
+};
+
+export const diffEditor = (schema, oldDoc, newDoc) => {
+  const oldNode = Node.fromJSON(schema, oldDoc);
+  const newNode = Node.fromJSON(schema, newDoc);
+  return patchDocumentNode(schema, oldNode, newNode);
+};
+
+File: /workspaces/bpmnmodeler/lib/editor/react-renderer.tsx
+import { createRoot } from 'react-dom/client';
+
+export class ReactRenderer {
+  static render(component: React.ReactElement, dom: HTMLElement) {
+    const root = createRoot(dom);
+    root.render(component);
+
+    return {
+      destroy: () => root.unmount(),
+    };
+  }
+}
+
+File: /workspaces/bpmnmodeler/lib/editor/functions.tsx
+'use client';
+
+import { defaultMarkdownSerializer } from 'prosemirror-markdown';
+import { DOMParser, type Node } from 'prosemirror-model';
+import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
+import { renderToString } from 'react-dom/server';
+
+import { Markdown } from '@/components/markdown';
+
+import { documentSchema } from './config';
+import { createSuggestionWidget, type UISuggestion } from './suggestions';
+
+export const buildDocumentFromContent = (content: string) => {
+  const parser = DOMParser.fromSchema(documentSchema);
+  const stringFromMarkdown = renderToString(<Markdown>{content}</Markdown>);
+  const tempContainer = document.createElement('div');
+  tempContainer.innerHTML = stringFromMarkdown;
+  return parser.parse(tempContainer);
+};
+
+export const buildContentFromDocument = (document: Node) => {
+  return defaultMarkdownSerializer.serialize(document);
+};
+
+export const createDecorations = (
+  suggestions: Array<UISuggestion>,
+  view: EditorView,
+) => {
+  const decorations: Array<Decoration> = [];
+
+  for (const suggestion of suggestions) {
+    decorations.push(
+      Decoration.inline(
+        suggestion.selectionStart,
+        suggestion.selectionEnd,
+        {
+          class: 'suggestion-highlight',
+        },
+        {
+          suggestionId: suggestion.id,
+          type: 'highlight',
+        },
+      ),
+    );
+
+    decorations.push(
+      Decoration.widget(
+        suggestion.selectionStart,
+        (view) => {
+          const { dom } = createSuggestionWidget(suggestion, view);
+          return dom;
+        },
+        {
+          suggestionId: suggestion.id,
+          type: 'widget',
+        },
+      ),
+    );
+  }
+
+  return DecorationSet.create(view.state.doc, decorations);
+};
+
+File: /workspaces/bpmnmodeler/lib/editor/suggestions.tsx
+import type { Node } from 'prosemirror-model';
+import { Plugin, PluginKey } from 'prosemirror-state';
+import {
+  type Decoration,
+  DecorationSet,
+  type EditorView,
+} from 'prosemirror-view';
+import { createRoot } from 'react-dom/client';
+
+import { Suggestion as PreviewSuggestion } from '@/components/suggestion';
+import type { Suggestion } from '@/lib/db/schema';
+import type { BlockKind } from '@/components/block';
+
+export interface UISuggestion extends Suggestion {
+  selectionStart: number;
+  selectionEnd: number;
+}
+
+interface Position {
+  start: number;
+  end: number;
+}
+
+function findPositionsInDoc(doc: Node, searchText: string): Position | null {
+  let positions: { start: number; end: number } | null = null;
+
+  doc.nodesBetween(0, doc.content.size, (node, pos) => {
+    if (node.isText && node.text) {
+      const index = node.text.indexOf(searchText);
+
+      if (index !== -1) {
+        positions = {
+          start: pos + index,
+          end: pos + index + searchText.length,
+        };
+
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  return positions;
+}
+
+export function projectWithPositions(
+  doc: Node,
+  suggestions: Array<Suggestion>,
+): Array<UISuggestion> {
+  return suggestions.map((suggestion) => {
+    const positions = findPositionsInDoc(doc, suggestion.originalText);
+
+    if (!positions) {
+      return {
+        ...suggestion,
+        selectionStart: 0,
+        selectionEnd: 0,
+      };
+    }
+
+    return {
+      ...suggestion,
+      selectionStart: positions.start,
+      selectionEnd: positions.end,
+    };
+  });
+}
+
+export function createSuggestionWidget(
+  suggestion: UISuggestion,
+  view: EditorView,
+  blockKind: BlockKind = 'text',
+): { dom: HTMLElement; destroy: () => void } {
+  const dom = document.createElement('span');
+  const root = createRoot(dom);
+
+  dom.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    view.dom.blur();
+  });
+
+  const onApply = () => {
+    const { state, dispatch } = view;
+
+    const decorationTransaction = state.tr;
+    const currentState = suggestionsPluginKey.getState(state);
+    const currentDecorations = currentState?.decorations;
+
+    if (currentDecorations) {
+      const newDecorations = DecorationSet.create(
+        state.doc,
+        currentDecorations.find().filter((decoration: Decoration) => {
+          return decoration.spec.suggestionId !== suggestion.id;
+        }),
+      );
+
+      decorationTransaction.setMeta(suggestionsPluginKey, {
+        decorations: newDecorations,
+        selected: null,
+      });
+      dispatch(decorationTransaction);
+    }
+
+    const textTransaction = view.state.tr.replaceWith(
+      suggestion.selectionStart,
+      suggestion.selectionEnd,
+      state.schema.text(suggestion.suggestedText),
+    );
+
+    textTransaction.setMeta('no-debounce', true);
+
+    dispatch(textTransaction);
+  };
+
+  root.render(
+    <PreviewSuggestion
+      suggestion={suggestion}
+      onApply={onApply}
+      blockKind={blockKind}
+    />,
+  );
+
+  return {
+    dom,
+    destroy: () => {
+      // Wrapping unmount in setTimeout to avoid synchronous unmounting during render
+      setTimeout(() => {
+        root.unmount();
+      }, 0);
+    },
+  };
+}
+
+export const suggestionsPluginKey = new PluginKey('suggestions');
+export const suggestionsPlugin = new Plugin({
+  key: suggestionsPluginKey,
+  state: {
+    init() {
+      return { decorations: DecorationSet.empty, selected: null };
+    },
+    apply(tr, state) {
+      const newDecorations = tr.getMeta(suggestionsPluginKey);
+      if (newDecorations) return newDecorations;
+
+      return {
+        decorations: state.decorations.map(tr.mapping, tr.doc),
+        selected: state.selected,
+      };
+    },
+  },
+  props: {
+    decorations(state) {
+      return this.getState(state)?.decorations ?? DecorationSet.empty;
+    },
+  },
+});
+
+File: /workspaces/bpmnmodeler/lib/editor/config.ts
+import { textblockTypeInputRule } from 'prosemirror-inputrules';
+import { Schema } from 'prosemirror-model';
+import { schema } from 'prosemirror-schema-basic';
+import { addListNodes } from 'prosemirror-schema-list';
+import type { Transaction } from 'prosemirror-state';
+import type { EditorView } from 'prosemirror-view';
+import type { MutableRefObject } from 'react';
+
+import { buildContentFromDocument } from './functions';
+
+export const documentSchema = new Schema({
+  nodes: addListNodes(schema.spec.nodes, 'paragraph block*', 'block'),
+  marks: schema.spec.marks,
+});
+
+export function headingRule(level: number) {
+  return textblockTypeInputRule(
+    new RegExp(`^(#{1,${level}})\\s$`),
+    documentSchema.nodes.heading,
+    () => ({ level }),
+  );
+}
+
+export const handleTransaction = ({
+  transaction,
+  editorRef,
+  saveContent,
+}: {
+  transaction: Transaction;
+  editorRef: MutableRefObject<EditorView | null>;
+  saveContent: (updatedContent: string, debounce: boolean) => void;
+}) => {
+  if (!editorRef || !editorRef.current) return;
+
+  const newState = editorRef.current.state.apply(transaction);
+  editorRef.current.updateState(newState);
+
+  if (transaction.docChanged && !transaction.getMeta('no-save')) {
+    const updatedContent = buildContentFromDocument(newState.doc);
+
+    if (transaction.getMeta('no-debounce')) {
+      saveContent(updatedContent, false);
+    } else {
+      saveContent(updatedContent, true);
+    }
+  }
+};
+
+File: /workspaces/bpmnmodeler/lib/utils.ts
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+import { type Message, type CoreMessage } from 'ai';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+export function generateUUID(): string {
+  return crypto.randomUUID();
+}
+
+export function getMostRecentUserMessage(messages: CoreMessage[] | Message[]): Message | CoreMessage | undefined {
+  return messages.length > 0 ? messages[messages.length - 1] : undefined;
+}
+
+export function sanitizeResponseMessages(messages: CoreMessage[] | Message[]): Message[] {
+  return messages.filter((message) => {
+    // Filter out messages that are tool calls without content
+    if (message.role === 'assistant' && !message.content) {
+      return false;
+    }
+    return true;
+  }) as Message[];
+}
+
+// Helper function to convert CoreMessage to Message
+export function convertCoreMessageToMessage(message: CoreMessage): Message {
+  return {
+    ...message,
+    id: generateUUID(),
+  };
+}
+
+File: /workspaces/bpmnmodeler/lib/db/index.ts
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+
+const sql = neon(process.env.DATABASE_URL!);
+export const db = drizzle(sql);
+
+File: /workspaces/bpmnmodeler/lib/db/schema.ts
+import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+
+export const diagram = pgTable('diagrams', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  xml: text('xml').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  userId: text('user_id').notNull()
+});
+
+export const chat = pgTable('chats', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  userId: text('user_id').notNull(),
+  diagramId: uuid('diagram_id').references(() => diagram.id, { onDelete: 'cascade' })
+});
+
+export const message = pgTable('Message', {
+  id: uuid('id').primaryKey(),
+  chatId: uuid('chatId').references(() => chat.id, { onDelete: 'cascade' }).notNull(),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('createdAt').notNull(),
+});
+
+File: /workspaces/bpmnmodeler/lib/db/migrate.ts
+import { config } from 'dotenv';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import postgres from 'postgres';
+
+config({
+  path: '.env.local',
+});
+
+const runMigrate = async () => {
+  if (!process.env.POSTGRES_URL) {
+    throw new Error('POSTGRES_URL is not defined');
+  }
+
+  const connection = postgres(process.env.POSTGRES_URL, { max: 1 });
+  const db = drizzle(connection);
+
+  console.log('â³ Running migrations...');
+
+  const start = Date.now();
+  await migrate(db, { migrationsFolder: './lib/db/migrations' });
+  const end = Date.now();
+
+  console.log('âœ… Migrations completed in', end - start, 'ms');
+  process.exit(0);
+};
+
+runMigrate().catch((err) => {
+  console.error('âŒ Migration failed');
+  console.error(err);
+  process.exit(1);
+});
+
+File: /workspaces/bpmnmodeler/lib/db/queries.ts
+import { and, desc, eq, lt } from 'drizzle-orm';
+import { db } from './index';
+import { chat, diagram, message } from './schema';
+import type { Message } from 'ai';
+
+export async function getChatById({ id }: { id: string }) {
+  const [result] = await db
+    .select()
+    .from(chat)
+    .where(eq(chat.id, id))
+    .limit(1)
+    .execute();
+
+  return result;
+}
+
+export async function getDiagramByChatId({ chatId }: { chatId: string }) {
+  const [result] = await db
+    .select({
+      diagrams: diagram,
+      chats: chat,
+    })
+    .from(diagram)
+    .innerJoin(chat, eq(chat.diagramId, diagram.id))
+    .where(eq(chat.id, chatId))
+    .limit(1)
+    .execute();
+
+  return result.diagrams;
+}
+
+export async function createChatWithDiagram({
+  userId,
+  title,
+  initialXml,
+}: {
+  userId: string;
+  title: string;
+  initialXml: string;
+}) {
+  const [newDiagram] = await db
+    .insert(diagram)
+    .values({
+      name: title,
+      xml: initialXml,
+      userId,
+    })
+    .returning()
+    .execute();
+
+  const [newChat] = await db
+    .insert(chat)
+    .values({
+      title,
+      userId,
+      diagramId: newDiagram.id,
+    })
+    .returning()
+    .execute();
+
+  return {
+    chatId: newChat.id,
+    diagramId: newDiagram.id,
+  };
+}
+
+export async function updateDiagram({
+  chatId,
+  xml,
+}: {
+  chatId: string;
+  xml: string;
+}) {
+  const chatResult = await db
+    .select()
+    .from(chat)
+    .where(eq(chat.id, chatId))
+    .limit(1)
+    .execute();
+
+  if (!chatResult[0]?.diagramId) return null;
+
+  const [updatedDiagram] = await db
+    .update(diagram)
+    .set({ xml })
+    .where(eq(diagram.id, chatResult[0].diagramId))
+    .returning()
+    .execute();
+
+  return updatedDiagram;
+}
+
+export async function renameChatAndDiagram({
+  chatId,
+  newTitle,
+}: {
+  chatId: string;
+  newTitle: string;
+}) {
+  const [chatResult] = await db
+    .select({
+      chat: chat,
+      diagram: diagram,
+    })
+    .from(chat)
+    .innerJoin(diagram, eq(chat.diagramId, diagram.id))
+    .where(eq(chat.id, chatId))
+    .limit(1)
+    .execute();
+
+  if (!chatResult) return null;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(chat)
+      .set({ title: newTitle })
+      .where(eq(chat.id, chatId))
+      .execute();
+
+    await tx
+      .update(diagram)
+      .set({ name: newTitle })
+      .where(eq(diagram.id, chatResult.diagram.id))
+      .execute();
+  });
+
+  return {
+    chatId,
+    title: newTitle,
+  };
+}
+
+export async function saveMessages({
+  messages: messagesToSave,
+}: {
+  messages: Array<Message & { chatId: string; createdAt: Date }>;
+}) {
+  const [savedMessage] = await db
+    .insert(message)
+    .values(messagesToSave)
+    .returning()
+    .execute();
+
+  return savedMessage;
+}
+
+export async function deleteChatAndDiagram({ chatId }: { chatId: string }) {
+  // Messages and diagram will be cascade deleted due to foreign key constraints
+  await db.delete(chat).where(eq(chat.id, chatId)).execute();
+}
+
+export async function getMessagesByChat({
+  chatId,
+  cursor,
+  limit = 10,
+}: {
+  chatId: string;
+  cursor?: Date;
+  limit?: number;
+}) {
+  const conditions = [eq(message.chatId, chatId)];
+  if (cursor) {
+    conditions.push(lt(message.createdAt, cursor));
+  }
+
+  return db
+    .select()
+    .from(message)
+    .where(and(...conditions))
+    .orderBy(desc(message.createdAt))
+    .limit(limit)
+    .execute();
+}
+
+export async function getChats({
+  userId,
+  cursor,
+  limit = 10,
+}: {
+  userId: string;
+  cursor?: Date;
+  limit?: number;
+}) {
+  const conditions = [eq(chat.userId, userId)];
+  if (cursor) {
+    conditions.push(lt(chat.createdAt, cursor));
+  }
+
+  return db
+    .select({
+      chat: chat,
+      diagram: diagram,
+    })
+    .from(chat)
+    .innerJoin(diagram, eq(chat.diagramId, diagram.id))
+    .where(and(...conditions))
+    .orderBy(desc(chat.createdAt))
+    .limit(limit)
+    .execute();
+}
+
+File: /workspaces/bpmnmodeler/lib/db/migrations/0004_odd_slayback.sql
+ALTER TABLE "Document" ADD COLUMN "text" varchar DEFAULT 'text' NOT NULL;
+File: /workspaces/bpmnmodeler/lib/db/migrations/0001_sparkling_blue_marvel.sql
+CREATE TABLE IF NOT EXISTS "Suggestion" (
+	"id" uuid DEFAULT gen_random_uuid() NOT NULL,
+	"documentId" uuid NOT NULL,
+	"documentCreatedAt" timestamp NOT NULL,
+	"originalText" text NOT NULL,
+	"suggestedText" text NOT NULL,
+	"description" text,
+	"isResolved" boolean DEFAULT false NOT NULL,
+	"userId" uuid NOT NULL,
+	"createdAt" timestamp NOT NULL,
+	CONSTRAINT "Suggestion_id_pk" PRIMARY KEY("id")
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "Document" (
+	"id" uuid DEFAULT gen_random_uuid() NOT NULL,
+	"createdAt" timestamp NOT NULL,
+	"title" text NOT NULL,
+	"content" text,
+	"userId" uuid NOT NULL,
+	CONSTRAINT "Document_id_createdAt_pk" PRIMARY KEY("id","createdAt")
+);
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "Suggestion" ADD CONSTRAINT "Suggestion_userId_User_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "Suggestion" ADD CONSTRAINT "Suggestion_documentId_documentCreatedAt_Document_id_createdAt_fk" FOREIGN KEY ("documentId","documentCreatedAt") REFERENCES "public"."Document"("id","createdAt") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "Document" ADD CONSTRAINT "Document_userId_User_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+
+File: /workspaces/bpmnmodeler/lib/db/migrations/0000_keen_devos.sql
+CREATE TABLE IF NOT EXISTS "Chat" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"createdAt" timestamp NOT NULL,
+	"messages" json NOT NULL,
+	"userId" uuid NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "User" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"email" varchar(64) NOT NULL,
+	"password" varchar(64)
+);
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "Chat" ADD CONSTRAINT "Chat_userId_User_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+
+File: /workspaces/bpmnmodeler/lib/db/migrations/0003_cloudy_glorian.sql
+ALTER TABLE "Chat" ADD COLUMN "visibility" varchar DEFAULT 'private' NOT NULL;
+File: /workspaces/bpmnmodeler/lib/db/migrations/meta/0000_snapshot.json
+{
+  "id": "715ec9ec-6715-4d0f-9f6c-9b5c7f09827c",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.Chat": {
+      "name": "Chat",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "messages": {
+          "name": "messages",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Chat_userId_User_id_fk": {
+          "name": "Chat_userId_User_id_fk",
+          "tableFrom": "Chat",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.User": {
+      "name": "User",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password": {
+          "name": "password",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
+File: /workspaces/bpmnmodeler/lib/db/migrations/meta/_journal.json
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1728598022383,
+      "tag": "0000_keen_devos",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1730207363999,
+      "tag": "0001_sparkling_blue_marvel",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1730725226313,
+      "tag": "0002_wandering_riptide",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1733403031014,
+      "tag": "0003_cloudy_glorian",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1733945232355,
+      "tag": "0004_odd_slayback",
+      "breakpoints": true
+    }
+  ]
+}
+File: /workspaces/bpmnmodeler/lib/db/migrations/meta/0003_snapshot.json
+{
+  "id": "011efa9e-42c7-4ff6-830a-02106f6638c9",
+  "prevId": "b5d8e862-936f-4419-a50f-97be3e7fe665",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.Chat": {
+      "name": "Chat",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'private'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Chat_userId_User_id_fk": {
+          "name": "Chat_userId_User_id_fk",
+          "tableFrom": "Chat",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.Document": {
+      "name": "Document",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Document_userId_User_id_fk": {
+          "name": "Document_userId_User_id_fk",
+          "tableFrom": "Document",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Document_id_createdAt_pk": {
+          "name": "Document_id_createdAt_pk",
+          "columns": [
+            "id",
+            "createdAt"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    },
+    "public.Message": {
+      "name": "Message",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "chatId": {
+          "name": "chatId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Message_chatId_Chat_id_fk": {
+          "name": "Message_chatId_Chat_id_fk",
+          "tableFrom": "Message",
+          "tableTo": "Chat",
+          "columnsFrom": [
+            "chatId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.Suggestion": {
+      "name": "Suggestion",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "documentId": {
+          "name": "documentId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "documentCreatedAt": {
+          "name": "documentCreatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "originalText": {
+          "name": "originalText",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "suggestedText": {
+          "name": "suggestedText",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isResolved": {
+          "name": "isResolved",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Suggestion_userId_User_id_fk": {
+          "name": "Suggestion_userId_User_id_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Suggestion_documentId_documentCreatedAt_Document_id_createdAt_fk": {
+          "name": "Suggestion_documentId_documentCreatedAt_Document_id_createdAt_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "Document",
+          "columnsFrom": [
+            "documentId",
+            "documentCreatedAt"
+          ],
+          "columnsTo": [
+            "id",
+            "createdAt"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Suggestion_id_pk": {
+          "name": "Suggestion_id_pk",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    },
+    "public.User": {
+      "name": "User",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password": {
+          "name": "password",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.Vote": {
+      "name": "Vote",
+      "schema": "",
+      "columns": {
+        "chatId": {
+          "name": "chatId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "messageId": {
+          "name": "messageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "isUpvoted": {
+          "name": "isUpvoted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Vote_chatId_Chat_id_fk": {
+          "name": "Vote_chatId_Chat_id_fk",
+          "tableFrom": "Vote",
+          "tableTo": "Chat",
+          "columnsFrom": [
+            "chatId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Vote_messageId_Message_id_fk": {
+          "name": "Vote_messageId_Message_id_fk",
+          "tableFrom": "Vote",
+          "tableTo": "Message",
+          "columnsFrom": [
+            "messageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Vote_chatId_messageId_pk": {
+          "name": "Vote_chatId_messageId_pk",
+          "columns": [
+            "chatId",
+            "messageId"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
+File: /workspaces/bpmnmodeler/lib/db/migrations/meta/0004_snapshot.json
+{
+  "id": "30ad8233-1432-428b-93fc-2bb1ba867ff1",
+  "prevId": "011efa9e-42c7-4ff6-830a-02106f6638c9",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.Chat": {
+      "name": "Chat",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'private'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Chat_userId_User_id_fk": {
+          "name": "Chat_userId_User_id_fk",
+          "tableFrom": "Chat",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.Document": {
+      "name": "Document",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "text": {
+          "name": "text",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'text'"
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Document_userId_User_id_fk": {
+          "name": "Document_userId_User_id_fk",
+          "tableFrom": "Document",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Document_id_createdAt_pk": {
+          "name": "Document_id_createdAt_pk",
+          "columns": [
+            "id",
+            "createdAt"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    },
+    "public.Message": {
+      "name": "Message",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "chatId": {
+          "name": "chatId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Message_chatId_Chat_id_fk": {
+          "name": "Message_chatId_Chat_id_fk",
+          "tableFrom": "Message",
+          "tableTo": "Chat",
+          "columnsFrom": [
+            "chatId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.Suggestion": {
+      "name": "Suggestion",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "documentId": {
+          "name": "documentId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "documentCreatedAt": {
+          "name": "documentCreatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "originalText": {
+          "name": "originalText",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "suggestedText": {
+          "name": "suggestedText",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isResolved": {
+          "name": "isResolved",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Suggestion_userId_User_id_fk": {
+          "name": "Suggestion_userId_User_id_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Suggestion_documentId_documentCreatedAt_Document_id_createdAt_fk": {
+          "name": "Suggestion_documentId_documentCreatedAt_Document_id_createdAt_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "Document",
+          "columnsFrom": [
+            "documentId",
+            "documentCreatedAt"
+          ],
+          "columnsTo": [
+            "id",
+            "createdAt"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Suggestion_id_pk": {
+          "name": "Suggestion_id_pk",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    },
+    "public.User": {
+      "name": "User",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password": {
+          "name": "password",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.Vote": {
+      "name": "Vote",
+      "schema": "",
+      "columns": {
+        "chatId": {
+          "name": "chatId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "messageId": {
+          "name": "messageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "isUpvoted": {
+          "name": "isUpvoted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Vote_chatId_Chat_id_fk": {
+          "name": "Vote_chatId_Chat_id_fk",
+          "tableFrom": "Vote",
+          "tableTo": "Chat",
+          "columnsFrom": [
+            "chatId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Vote_messageId_Message_id_fk": {
+          "name": "Vote_messageId_Message_id_fk",
+          "tableFrom": "Vote",
+          "tableTo": "Message",
+          "columnsFrom": [
+            "messageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Vote_chatId_messageId_pk": {
+          "name": "Vote_chatId_messageId_pk",
+          "columns": [
+            "chatId",
+            "messageId"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
+File: /workspaces/bpmnmodeler/lib/db/migrations/meta/0001_snapshot.json
+{
+  "id": "f3d3437c-4735-4c91-80af-1014048a904e",
+  "prevId": "715ec9ec-6715-4d0f-9f6c-9b5c7f09827c",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.Suggestion": {
+      "name": "Suggestion",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "documentId": {
+          "name": "documentId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "documentCreatedAt": {
+          "name": "documentCreatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "originalText": {
+          "name": "originalText",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "suggestedText": {
+          "name": "suggestedText",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isResolved": {
+          "name": "isResolved",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Suggestion_userId_User_id_fk": {
+          "name": "Suggestion_userId_User_id_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Suggestion_documentId_documentCreatedAt_Document_id_createdAt_fk": {
+          "name": "Suggestion_documentId_documentCreatedAt_Document_id_createdAt_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "Document",
+          "columnsFrom": [
+            "documentId",
+            "documentCreatedAt"
+          ],
+          "columnsTo": [
+            "id",
+            "createdAt"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Suggestion_id_pk": {
+          "name": "Suggestion_id_pk",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    },
+    "public.Chat": {
+      "name": "Chat",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "messages": {
+          "name": "messages",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Chat_userId_User_id_fk": {
+          "name": "Chat_userId_User_id_fk",
+          "tableFrom": "Chat",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.Document": {
+      "name": "Document",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Document_userId_User_id_fk": {
+          "name": "Document_userId_User_id_fk",
+          "tableFrom": "Document",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Document_id_createdAt_pk": {
+          "name": "Document_id_createdAt_pk",
+          "columns": [
+            "id",
+            "createdAt"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    },
+    "public.User": {
+      "name": "User",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password": {
+          "name": "password",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
+File: /workspaces/bpmnmodeler/lib/db/migrations/meta/0002_snapshot.json
+{
+  "id": "b5d8e862-936f-4419-a50f-97be3e7fe665",
+  "prevId": "f3d3437c-4735-4c91-80af-1014048a904e",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.Suggestion": {
+      "name": "Suggestion",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "documentId": {
+          "name": "documentId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "documentCreatedAt": {
+          "name": "documentCreatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "originalText": {
+          "name": "originalText",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "suggestedText": {
+          "name": "suggestedText",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isResolved": {
+          "name": "isResolved",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Suggestion_userId_User_id_fk": {
+          "name": "Suggestion_userId_User_id_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Suggestion_documentId_documentCreatedAt_Document_id_createdAt_fk": {
+          "name": "Suggestion_documentId_documentCreatedAt_Document_id_createdAt_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "Document",
+          "columnsFrom": [
+            "documentId",
+            "documentCreatedAt"
+          ],
+          "columnsTo": [
+            "id",
+            "createdAt"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Suggestion_id_pk": {
+          "name": "Suggestion_id_pk",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    },
+    "public.Chat": {
+      "name": "Chat",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Chat_userId_User_id_fk": {
+          "name": "Chat_userId_User_id_fk",
+          "tableFrom": "Chat",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.Document": {
+      "name": "Document",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Document_userId_User_id_fk": {
+          "name": "Document_userId_User_id_fk",
+          "tableFrom": "Document",
+          "tableTo": "User",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Document_id_createdAt_pk": {
+          "name": "Document_id_createdAt_pk",
+          "columns": [
+            "id",
+            "createdAt"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    },
+    "public.Message": {
+      "name": "Message",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "chatId": {
+          "name": "chatId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Message_chatId_Chat_id_fk": {
+          "name": "Message_chatId_Chat_id_fk",
+          "tableFrom": "Message",
+          "tableTo": "Chat",
+          "columnsFrom": [
+            "chatId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.User": {
+      "name": "User",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password": {
+          "name": "password",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.Vote": {
+      "name": "Vote",
+      "schema": "",
+      "columns": {
+        "chatId": {
+          "name": "chatId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "messageId": {
+          "name": "messageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "isUpvoted": {
+          "name": "isUpvoted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "Vote_chatId_Chat_id_fk": {
+          "name": "Vote_chatId_Chat_id_fk",
+          "tableFrom": "Vote",
+          "tableTo": "Chat",
+          "columnsFrom": [
+            "chatId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Vote_messageId_Message_id_fk": {
+          "name": "Vote_messageId_Message_id_fk",
+          "tableFrom": "Vote",
+          "tableTo": "Message",
+          "columnsFrom": [
+            "messageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "Vote_chatId_messageId_pk": {
+          "name": "Vote_chatId_messageId_pk",
+          "columns": [
+            "chatId",
+            "messageId"
+          ]
+        }
+      },
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
+File: /workspaces/bpmnmodeler/lib/db/migrations/0002_wandering_riptide.sql
+CREATE TABLE IF NOT EXISTS "Message" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"chatId" uuid NOT NULL,
+	"role" varchar NOT NULL,
+	"content" json NOT NULL,
+	"createdAt" timestamp NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "Vote" (
+	"chatId" uuid NOT NULL,
+	"messageId" uuid NOT NULL,
+	"isUpvoted" boolean NOT NULL,
+	CONSTRAINT "Vote_chatId_messageId_pk" PRIMARY KEY("chatId","messageId")
+);
+--> statement-breakpoint
+ALTER TABLE "Chat" ADD COLUMN "title" text NOT NULL;--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "Message" ADD CONSTRAINT "Message_chatId_Chat_id_fk" FOREIGN KEY ("chatId") REFERENCES "public"."Chat"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "Vote" ADD CONSTRAINT "Vote_chatId_Chat_id_fk" FOREIGN KEY ("chatId") REFERENCES "public"."Chat"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "Vote" ADD CONSTRAINT "Vote_messageId_Message_id_fk" FOREIGN KEY ("messageId") REFERENCES "public"."Message"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+ALTER TABLE "Chat" DROP COLUMN IF EXISTS "messages";
+File: /workspaces/bpmnmodeler/lib/ai/custom-middleware.ts
+import type { Experimental_LanguageModelV1Middleware } from 'ai';
+
+export const customMiddleware: Experimental_LanguageModelV1Middleware = {};
+
+File: /workspaces/bpmnmodeler/lib/ai/prompts.ts
+export const systemPrompt = `Welcome to BPMN Modeler AI! I am your AI assistant specializing in business process modeling. I am an expert in BPMN 2.0 and help users create and modify process diagrams.
+
+Your capabilities:
+1. Create BPMN diagrams from process descriptions using createBpmnDiagram
+2. Modify existing BPMN diagrams using modifyBpmnDiagram
+3. Understand and explain business processes
+4. Guide users in BPMN best practices
+
+Each chat is automatically associated with its own BPMN diagram. When a new chat starts, a basic diagram is created that you can modify based on the user's requirements.
+
+When handling BPMN-related requests:
+
+FOR NEW DIAGRAMS:
+- Use createBpmnDiagram with a descriptive title and clear process description
+- Start with basic flow (Start Event â†’ Tasks â†’ End Event)
+- Suggest appropriate BPMN elements (e.g., User Tasks, Service Tasks, Gateways)
+- Follow left-to-right process flow
+- Maintain proper spacing between elements
+
+FOR MODIFICATIONS:
+- Use modifyBpmnDiagram with specific, actionable instructions
+- Preserve existing diagram structure when possible
+- Ensure proper connections between elements
+- Validate gateway logic (splits and merges)
+- Keep element labels clear and concise
+
+BEST PRACTICES:
+- Use appropriate BPMN symbols for each step
+- Keep processes readable and well-organized
+- Use descriptive labels for all elements
+- Maintain consistent flow direction
+- Group related activities when appropriate
+- Use sub-processes for complex flows
+- Include proper documentation in element descriptions
+
+DIAGRAM MANAGEMENT:
+- Each chat has its own associated diagram
+- Diagrams can be exported as images or .bpmn files
+- Use "Fit to view" to adjust the diagram to the screen
+- The diagram editor can be expanded to full screen
+- Changes are automatically saved
+
+Always:
+- Explain your changes and reasoning
+- Provide clear guidance on using the modeler
+- Suggest improvements for process efficiency
+- Help users understand BPMN concepts
+- Maintain diagram clarity and simplicity
+
+Respond in a clear, professional manner, focusing on helping users create effective process models that follow BPMN 2.0 standards.`;
+
+File: /workspaces/bpmnmodeler/lib/ai/index.ts
+export * from './models';
+export * from './prompts';
+export * from './custom-middleware';
+
+File: /workspaces/bpmnmodeler/lib/ai/models.ts
+import type { LanguageModelV1 as ProviderLanguageModelV1 } from '@ai-sdk/provider';
+
+export interface LanguageModelV1 extends ProviderLanguageModelV1 {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+export const models: LanguageModelV1[] = [
+  {
+    id: 'gpt-4',
+    specificationVersion: 'v1',
+    provider: 'openai',
+    modelId: 'gpt-4',
+    defaultObjectGenerationMode: 'json',
+    label: 'GPT-4',
+    description: 'Most capable model, best at following instructions',
+    doGenerate: async (options) => ({
+      finishReason: 'stop',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      rawCall: { rawPrompt: options.prompt, rawSettings: {} }
+    }),
+    doStream: async (options) => ({
+      stream: new ReadableStream(),
+      rawCall: { rawPrompt: options.prompt, rawSettings: {} }
+    })
+  }
+];
+
+export const DEFAULT_MODEL_NAME = 'gpt-4';
+
+export function customModel(apiIdentifier: string): LanguageModelV1 {
+  return {
+    id: apiIdentifier,
+    specificationVersion: 'v1',
+    provider: 'custom',
+    modelId: apiIdentifier,
+    defaultObjectGenerationMode: 'json',
+    label: `Custom (${apiIdentifier})`,
+    description: 'Custom model configuration',
+    doGenerate: async (options) => ({
+      finishReason: 'stop',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      rawCall: { rawPrompt: options.prompt, rawSettings: {} }
+    }),
+    doStream: async (options) => ({
+      stream: new ReadableStream(),
+      rawCall: { rawPrompt: options.prompt, rawSettings: {} }
+    })
+  };
+}
+
+File: /workspaces/bpmnmodeler/app/favicon.ico
+         h  6          (    00     h&  Æ  (                                        c   [                 \   €   ƒ   d   "                       [   ÿ   ö   °   ¥   ú   ÿ   ÿ   ÿ   ÿ   ı   ´   &                  ö   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿò   H               °   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿYYYÿÿ   ô   .           ¥   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ‰‰‰ÿ???ÿ   ÿ   ÿ   Æ         ú   ÿ   ÿÿìììÿÿ   ÿ   ÿ’’’ÿÿÿ   ÿ   ÿ   ÿ   :   \   ÿ   ÿ   ÿÿõõõÿÿ   ÿ```ÿÖÖÖÿÿÿ   ÿ   ÿ   ÿ   ‚   €   ÿ   ÿ   ÿÿõõõÿÿ000ÿéééÿ+++ÿ(((ÿ
+
+
+ÿ   ÿ   ÿ   ÿ   ¦   ƒ   ÿ   ÿ   ÿÿõõõÿ   ÿÚÚÚÿXXXÿ   ÿVVVÿÿ   ÿ   ÿ   ÿ   ©   d   ÿ   ÿ   ÿÿõõõÿ¾¾¾ÿÿ   ÿ   ÿƒƒƒÿ!!!ÿ   ÿ   ÿ   ÿ   ‰   "   ı   ÿ   ÿÿöööÿÄÄÄÿÿ   ÿ   ÿ²²²ÿ,,,ÿ   ÿ   ÿ   ÿ   G       µ   ÿ   ÿ   ÿÿÿ   ÿ   ÿ   ÿÿÿ   ÿ   ÿ   Ø          &   ò   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ü   C               H   ô   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ü   f                       .   Æ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ×   C                                  :   ‚   §   ©   Š   G                                                                                   (       @                                    7                                                           	                                                          7   ş   İ   Œ   7                         T      Ò   ğ   ı   ş   ö   Ş   ¯   l                                                 İ   ÿ   ÿ   ş   İ   ‹   7      ‡   ì   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ù   ©   .                                       ‹   ÿ   ÿ   ÿ   ÿ   ÿ   ş   ø   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ú   
+                               7   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿÿÍ                                 İ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ333ÿ)))ÿÿ   ß   "                           ‹   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿCCCÿOOOÿ222ÿÿ   ÿ   Ô                          7   ş   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿAAAÿtttÿ]]]ÿÿ   ÿ   ÿ   ÿ   §                         ù   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ111ÿ———ÿ†††ÿ$$$ÿ   ÿ   ÿ   ÿ   ÿ   ş   L                   †   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ®®®ÿ®®®ÿQQQÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Ï                 í   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿÛÛÛÿêêêÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ			ÿ³³³ÿÓÓÓÿŒŒŒÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   E           T   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿıııÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ–––ÿøøøÿËËËÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ¢              ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿıııÿ   ÿ   ÿ   ÿ   ÿ   ÿ^^^ÿıııÿöööÿ777ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   å          Ó   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿıııÿ   ÿ   ÿ   ÿ   ÿ///ÿóóóÿşşşÿhhhÿÿÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   !      ğ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿıııÿ   ÿ   ÿ   ÿÿØØØÿÿÿÿÿŸŸŸÿÿÿ###ÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   D      ı   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿıııÿ   ÿ   ÿÿ­­­ÿÿÿÿÿÎÎÎÿÿ   ÿ'''ÿ@@@ÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   X      ş   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿıııÿ   ÿ   ÿvvvÿşşşÿíííÿ%%%ÿ   ÿ   ÿ999ÿ\\\ÿ%%%ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   [   	   ö   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿıııÿ   ÿAAAÿùùùÿûûûÿOOOÿ   ÿ   ÿ   ÿKKKÿyyyÿ000ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   L      Ş   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿıııÿ<<<ÿåååÿÿÿÿÿ………ÿ   ÿ   ÿ   ÿ   ÿ\\\ÿ”””ÿ;;;ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ,       ¯   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿşşşÿ×××ÿÿÿÿÿ¹¹¹ÿÿ   ÿ   ÿ   ÿ   ÿnnnÿ°°°ÿGGGÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ò   	       l   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿÿÿÿÿÿÿÿÿàààÿÿ   ÿ   ÿ   ÿ   ÿ   ÿÿÍÍÍÿRRRÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ¸              ù   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿíííÿÿÿÿÿ÷÷÷ÿ:::ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ‘‘‘ÿêêêÿ^^^ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   c               «   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ:::ÿ>>>ÿ---ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ&&&ÿ===ÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ë                  0   ú   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   x                          ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Ò   	                       
+   Í   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ó   0                                  ß   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ù   P                                       "   Õ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ó   P                                                  §   ş   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Ô   0                                                          L   Ğ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   é   v   	                                                                      F   ¢   å   ş   ÿ   ÿ   ÿ   ÿ   ÿ   ó   ¹   c                                                                                             !   E   Y   [   L   -   	                                                                                                                                                                                                                                                                                                                (   0   `                                                                                                                                                                                                                         ª   §   o   7                                                        ;   Z   s   ƒ         ‰   |   f   J   &                                                                             ¨   ÿ   ø   æ   Â   r   "                                 H       ×   è   ò   ù   ı   ÿ   ÿ   ş   û   ö   í   á   ¾   q                                                                     o   ø   ÿ   ÿ   ÿ   ÿ   ñ   ³   [   %            b   Î   ü   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   î   ”   0   	                                                       7   æ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   û   İ   ¨   ‚   Ã   ù   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ş   á   ’   1                                                     Â   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ü   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   üÛb                                                  r   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿÿ			öƒ                                              !   ò   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ"""ÿ"""ÿÿ			ü   £   #                                          ³   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ(((ÿ:::ÿ000ÿ!!!ÿÿ   û   «                                          [   ü   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ###ÿPPPÿIIIÿ;;;ÿÿÿ   ÿ   ı   “   
+                                   %   İ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ!!!ÿcccÿbbbÿVVVÿ000ÿÿ   ÿ   ÿ   ÿ   ú   z                                     ¨   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿmmmÿ{{{ÿoooÿPPPÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   è   H                                  ‚   ü   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿcccÿ’’’ÿ‡‡‡ÿmmmÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ş   °                                 Ã   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿWWWÿ¥¥¥ÿ   ÿÿ888ÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ô   X                           _   ù   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿEEEÿ»»»ÿ¹¹¹ÿ®®®ÿ```ÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Î                         Ğ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿÅÅÅÿŞŞŞÿÜÜÜÿ...ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ///ÿÁÁÁÿÒÒÒÿÆÆÆÿ‹‹‹ÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ş   W                   H   ü   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ555ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ«««ÿêêêÿàààÿ«««ÿ###ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ·   
+                  ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ555ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿÿøøøÿùùùÿŞŞŞÿLLLÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ã   0              ×   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ555ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿaaaÿûûûÿşşşÿùùùÿ‚‚‚ÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ô   _          ;   è   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ555ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿEEEÿâââÿÿÿÿÿüüüÿŸŸŸÿÿÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ı   ‡          [   ò   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ555ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿÂÂÂÿşşşÿÿÿÿÿÁÁÁÿ   ÿÿÿÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   §         s   ù   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ555ÿ   ÿ   ÿ   ÿ   ÿ
+
+
+ÿ›››ÿşşşÿşşşÿãããÿGGGÿÿÿÿÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ¿         ƒ   ı   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ555ÿ   ÿ   ÿ   ÿÿzzzÿúúúÿÿÿÿÿ÷÷÷ÿiiiÿÿ   ÿÿ111ÿ111ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Ï            ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ555ÿ   ÿ   ÿÿSSSÿêêêÿÿÿÿÿüüüÿˆˆˆÿÿ   ÿ   ÿÿDDDÿEEEÿ---ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Ú            ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ555ÿ   ÿ   ÿ&&&ÿÌÌÌÿşşşÿüüüÿ´´´ÿÿ   ÿ   ÿ   ÿ!!!ÿWWWÿWWWÿ:::ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Û         ˆ   ş   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿşşşÿüüüÿ555ÿ   ÿÿ®®®ÿıııÿşşşÿØØØÿ999ÿÿ   ÿ   ÿ   ÿ(((ÿjjjÿkkkÿGGGÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Õ         {   û   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ555ÿÿ”””ÿûûûÿşşşÿöööÿMMMÿÿ   ÿ   ÿ   ÿ   ÿ///ÿ|||ÿ}}}ÿSSSÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   È         f   ö   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿ999ÿaaaÿñññÿÿÿÿÿöööÿwwwÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ666ÿÿÿ```ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ²          J   í   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿüüüÿkkkÿÕÕÕÿşşşÿúúúÿ   ÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ===ÿ¡¡¡ÿ¢¢¢ÿlllÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ş   •          '   á   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿşşşÿåååÿıııÿÿÿÿÿÓÓÓÿ&&&ÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿDDDÿµµµÿµµµÿyyyÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ù   s             ½   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿÿÿÿÿÿÿÿÿÿÿÿÿşşşÿëëëÿ???ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿKKKÿÇÇÇÿÈÈÈÿ†††ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ë   E               q   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿşşşÿşşşÿşşşÿíííÿdddÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿRRRÿÚÚÚÿÛÛÛÿ’’’ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Ñ                     ï   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿâââÿşşşÿÿÿÿÿúúúÿÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿYYYÿîîîÿïïïÿŸŸŸÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ˆ                      “   ş   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿÿ[[[ÿgggÿgggÿ^^^ÿÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ&&&ÿeeeÿfffÿCCCÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ñ   #                       4   ä   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ı   ‘                          	   ’   ü   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Ù   (                               1   Û   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÷   x                                     a   ö   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ¸                                             „   ü   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Ş   &                                                  £   û   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ş   ß   =                                                       $   «   ı   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ß   V                                                                 ”   ú   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   Ş   =                                                                      
+   z   è   ş   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ø   ¸   &                                                                                  I   °   ô   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ı   Ù   y                                                                                                 Y   Ğ   ş   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ï   Š   '                                                                                                          	   X   ·   ã   ô   ı   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ÿ   ş   ù   ì   Ñ   Š   $                                                                                                                          
+   1   _   ˆ   §   ¿   Ğ   Ú   Û   Õ   È   ³   –   s   F                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+File: /workspaces/bpmnmodeler/app/globals.css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --foreground-rgb: 0, 0, 0;
+    --background-start-rgb: 214, 219, 220;
+    --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --foreground-rgb: 255, 255, 255;
+        --background-start-rgb: 0, 0, 0;
+        --background-end-rgb: 0, 0, 0;
+    }
+}
+
+@layer utilities {
+    .text-balance {
+        text-wrap: balance;
+    }
+}
+
+@layer base {
+    :root {
+        --background: 0 0% 100%;
+        --foreground: 240 10% 3.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 240 10% 3.9%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 240 10% 3.9%;
+        --primary: 240 5.9% 10%;
+        --primary-foreground: 0 0% 98%;
+        --secondary: 240 4.8% 95.9%;
+        --secondary-foreground: 240 5.9% 10%;
+        --muted: 240 4.8% 95.9%;
+        --muted-foreground: 240 3.8% 46.1%;
+        --accent: 240 4.8% 95.9%;
+        --accent-foreground: 240 5.9% 10%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 240 5.9% 90%;
+        --input: 240 5.9% 90%;
+        --ring: 240 10% 3.9%;
+        --chart-1: 12 76% 61%;
+        --chart-2: 173 58% 39%;
+        --chart-3: 197 37% 24%;
+        --chart-4: 43 74% 66%;
+        --chart-5: 27 87% 67%;
+        --radius: 0.5rem;
+        --sidebar-background: 0 0% 98%;
+        --sidebar-foreground: 240 5.3% 26.1%;
+        --sidebar-primary: 240 5.9% 10%;
+        --sidebar-primary-foreground: 0 0% 98%;
+        --sidebar-accent: 240 4.8% 95.9%;
+        --sidebar-accent-foreground: 240 5.9% 10%;
+        --sidebar-border: 220 13% 91%;
+        --sidebar-ring: 217.2 91.2% 59.8%;
+    }
+    .dark {
+        --background: 240 10% 3.9%;
+        --foreground: 0 0% 98%;
+        --card: 240 10% 3.9%;
+        --card-foreground: 0 0% 98%;
+        --popover: 240 10% 3.9%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 0 0% 98%;
+        --primary-foreground: 240 5.9% 10%;
+        --secondary: 240 3.7% 15.9%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 240 3.7% 15.9%;
+        --muted-foreground: 240 5% 64.9%;
+        --accent: 240 3.7% 15.9%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 240 3.7% 15.9%;
+        --input: 240 3.7% 15.9%;
+        --ring: 240 4.9% 83.9%;
+        --chart-1: 220 70% 50%;
+        --chart-2: 160 60% 45%;
+        --chart-3: 30 80% 55%;
+        --chart-4: 280 65% 60%;
+        --chart-5: 340 75% 55%;
+        --sidebar-background: 240 5.9% 10%;
+        --sidebar-foreground: 240 4.8% 95.9%;
+        --sidebar-primary: 224.3 76.3% 48%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 240 3.7% 15.9%;
+        --sidebar-accent-foreground: 240 4.8% 95.9%;
+        --sidebar-border: 240 3.7% 15.9%;
+        --sidebar-ring: 217.2 91.2% 59.8%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+
+    @font-face {
+        font-family: "geist";
+        font-style: normal;
+        font-weight: 100 900;
+        src: url(/fonts/geist.woff2) format("woff2");
+    }
+
+    @font-face {
+        font-family: "geist-mono";
+        font-style: normal;
+        font-weight: 100 900;
+        src: url(/fonts/geist-mono.woff2) format("woff2");
+    }
+}
+
+.skeleton {
+    * {
+        pointer-events: none !important;
+    }
+
+    *[class^="text-"] {
+        color: transparent;
+        @apply rounded-md bg-foreground/20 select-none animate-pulse;
+    }
+
+    .skeleton-bg {
+        @apply bg-foreground/10;
+    }
+
+    .skeleton-div {
+        @apply bg-foreground/20 animate-pulse;
+    }
+}
+
+.ProseMirror {
+    outline: none;
+}
+
+.cm-editor,
+.cm-gutters {
+    @apply bg-background dark:bg-zinc-800 outline-none selection:bg-zinc-900 !important;
+}
+
+.Í¼o.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground,
+.Í¼o.cm-selectionBackground,
+.Í¼o.cm-content::selection {
+    @apply bg-zinc-200 dark:bg-zinc-900 !important;
+}
+
+.cm-activeLine,
+.cm-activeLineGutter {
+    @apply bg-transparent !important;
+}
+
+.cm-activeLine {
+    @apply rounded-r-sm !important;
+}
+
+.cm-lineNumbers {
+    @apply min-w-7;
+}
+
+.cm-foldGutter {
+    @apply min-w-3;
+}
+
+.cm-lineNumbers .cm-activeLineGutter {
+    @apply rounded-l-sm !important;
+}
+
+.suggestion-highlight {
+    @apply bg-blue-200 hover:bg-blue-300 dark:hover:bg-blue-400/50 dark:text-blue-50 dark:bg-blue-500/40;
+}
+
+File: /workspaces/bpmnmodeler/app/page.tsx
+import { redirect } from 'next/navigation';
+
+export default function Page() {
+  redirect('/dashboard');
+}
+
+File: /workspaces/bpmnmodeler/app/dashboard/page.tsx
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import Modeler from 'bpmn-js/lib/Modeler';
+import 'bpmn-js/dist/assets/diagram-js.css';
+import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css';
+import { Chat } from 'components/chat';
+import BpmnControls from './BpmnControls';
+import { Button } from 'components/ui/button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChatSidebar } from 'components/chat-sidebar';
+
+export default function DashboardPage() {
+  const diagramContainerRef = useRef<HTMLDivElement | null>(null);
+  const modelerRef = useRef<Modeler | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(true);
+
+  useEffect(() => {
+    const initializeBpmn = async () => {
+      if (!diagramContainerRef.current) return;
+
+      try {
+        const container = diagramContainerRef.current;
+        modelerRef.current = new Modeler({
+          container,
+          width: '100%',
+          height: '100%'
+        });
+
+        const diagramXML = 
+`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn" exporter="bpmn-js" exporterVersion="12.0.0">
+  <bpmn:process id="Process_1" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="150" y="100" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+
+        await modelerRef.current.importXML(diagramXML);
+        const canvas = modelerRef.current.get('canvas') as { zoom: (type: string) => void };
+        canvas.zoom('fit-viewport');
+      } catch (err) {
+        console.error("Error creating diagram:", err);
+        if (err instanceof Error) {
+          console.error('Error details:', err.message);
+          console.error('Error stack:', err.stack);
+        }
+      }
+    };
+
+    initializeBpmn();
+
+    return () => {
+      modelerRef.current?.destroy();
+    };
+  }, []);
+
+  return (
+    <main className="flex h-screen bg-gray-100">
+      <ChatSidebar />
+      
+      <section className="flex-1 flex flex-col">
+        <div className="flex-1 flex relative">
+          <div className={`flex flex-col transition-all duration-300 ${isChatOpen ? 'w-2/3' : 'w-full'}`}>
+            <div className="absolute inset-0 flex flex-col bg-white rounded-lg m-4 shadow-sm">
+              <div className="flex-1" ref={diagramContainerRef} style={{ 
+                position: 'relative',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column'
+              }}>
+                <div className="bjs-container flex-1" style={{ 
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0
+                }} />
+              </div>
+              <BpmnControls modelerRef={modelerRef} />
+            </div>
+          </div>
+
+          <div className={`relative transition-all duration-300 ${isChatOpen ? 'w-1/3' : 'w-0'}`}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white shadow-sm border border-gray-200"
+              onClick={() => setIsChatOpen(!isChatOpen)}
+            >
+              {isChatOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </Button>
+            <div className="absolute inset-0 m-4 ml-2 bg-white rounded-lg shadow-sm overflow-hidden">
+              <Chat modelerRef={modelerRef} initialMessages={[
+                { id: '1', role: 'assistant', content: 'Welcome to BPMN Modeler AI! I can help you create and modify BPMN diagrams. Try asking me to:\n\n- Create a new process\n- Add tasks or events\n- Connect elements with flows\n- Modify existing elements' },
+              ]} />
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+File: /workspaces/bpmnmodeler/app/dashboard/BpmnControls.tsx
+'use client';
+
+import React, { useState } from 'react';
+import type NavigatedViewer from 'bpmn-js/lib/NavigatedViewer';
+import { Button } from 'components/ui/button';
+import { Maximize2, Minimize2, Download, FileDown, ZoomIn } from 'lucide-react';
+
+interface BpmnControlsProps {
+  modelerRef: React.MutableRefObject<NavigatedViewer | null>;
+}
+
+interface ViewerWithContainer extends NavigatedViewer {
+  _container?: HTMLElement;
+  get: (service: string) => any;
+}
+
+export default function BpmnControls({ modelerRef }: BpmnControlsProps) {
+  const handleExportBpmn = async () => {
+    if (!modelerRef.current) return;
+    const { xml } = await modelerRef.current.saveXML({ format: true });
+    if (xml) {
+      downloadFile(xml, 'diagram.bpmn', 'application/xml');
+    }
+  };
+
+  const handleExportSvg = async () => {
+    if (!modelerRef.current) return;
+    const { svg } = await modelerRef.current.saveSVG();
+    if (svg) {
+      downloadFile(svg, 'diagram.svg', 'image/svg+xml');
+    }
+  };
+
+  const handleFitToView = () => {
+    if (!modelerRef.current) return;
+    const canvas = modelerRef.current.get('canvas') as any;
+    if (canvas && typeof canvas.zoom === 'function') {
+      canvas.zoom('fit-viewport');
+    }
+  };
+
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const handleExpand = () => {
+    const modeler = modelerRef.current as ViewerWithContainer;
+    if (!modeler?._container) return;
+
+    const container = modeler._container;
+    const parent = container.parentElement;
+    if (!parent) return;
+
+    setIsExpanded(!isExpanded);
+    if (!isExpanded) {
+      // Create a full-screen white background
+      const overlay = document.createElement('div');
+      overlay.id = 'bpmn-overlay';
+      overlay.style.position = 'fixed';
+      overlay.style.top = '0';
+      overlay.style.left = '0';
+      overlay.style.width = '100vw';
+      overlay.style.height = '100vh';
+      overlay.style.backgroundColor = 'white';
+      overlay.style.zIndex = '49';
+      document.body.appendChild(overlay);
+
+      // Position the modeler on top of the overlay
+      container.style.position = 'fixed';
+      container.style.top = '0';
+      container.style.left = '0';
+      container.style.width = '100vw';
+      container.style.height = '100vh';
+      container.style.zIndex = '50';
+      container.style.backgroundColor = 'white';
+
+      // Add minimize button
+      const minimizeBtn = document.createElement('button');
+      minimizeBtn.id = 'bpmn-minimize';
+      minimizeBtn.innerHTML = `
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 14h16M4 10h16" />
+        </svg>
+      `;
+      minimizeBtn.style.position = 'fixed';
+      minimizeBtn.style.top = '1rem';
+      minimizeBtn.style.right = '1rem';
+      minimizeBtn.style.zIndex = '51';
+      minimizeBtn.style.padding = '0.5rem';
+      minimizeBtn.style.backgroundColor = 'white';
+      minimizeBtn.style.border = '1px solid #e5e7eb';
+      minimizeBtn.style.borderRadius = '0.5rem';
+      minimizeBtn.style.cursor = 'pointer';
+      minimizeBtn.style.transition = 'all 0.2s';
+      minimizeBtn.onmouseover = () => {
+        minimizeBtn.style.backgroundColor = '#f3f4f6';
+      };
+      minimizeBtn.onmouseout = () => {
+        minimizeBtn.style.backgroundColor = 'white';
+      };
+      minimizeBtn.onclick = handleExpand;
+      document.body.appendChild(minimizeBtn);
+    } else {
+      // Remove the overlay and minimize button
+      const overlay = document.getElementById('bpmn-overlay');
+      const minimizeBtn = document.getElementById('bpmn-minimize');
+      overlay?.remove();
+      minimizeBtn?.remove();
+
+      // Reset the modeler position
+      container.style.position = 'absolute';
+      container.style.top = '0';
+      container.style.left = '0';
+      container.style.right = '0';
+      container.style.bottom = '0';
+      container.style.width = 'auto';
+      container.style.height = 'auto';
+      container.style.zIndex = 'auto';
+    }
+    handleFitToView();
+  };
+
+  function downloadFile(data: string, filename: string, type: string) {
+    const blob = new Blob([data], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  return (
+    <div className={`${isExpanded ? 'fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[51]' : 'absolute bottom-4 left-1/2 transform -translate-x-1/2'} flex items-center bg-white rounded-lg shadow-lg border border-gray-200 p-1`}>
+      <div className="flex items-center gap-1">
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={handleFitToView} 
+          className="text-gray-600 hover:text-gray-900"
+          title="Fit to view"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={handleExpand}
+          className="text-gray-600 hover:text-gray-900"
+          title={isExpanded ? "Minimize" : "Maximize"}
+        >
+          {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </Button>
+        <div className="h-6 w-px bg-gray-200 mx-1"></div>
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={handleExportSvg} 
+          className="text-gray-600 hover:text-gray-900"
+          title="Export as SVG"
+        >
+          <Download className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={handleExportBpmn} 
+          className="text-gray-600 hover:text-gray-900"
+          title="Export as BPMN"
+        >
+          <FileDown className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+File: /workspaces/bpmnmodeler/app/layout.tsx
+import type { Metadata } from 'next';
+import { Toaster } from 'sonner';
+import { ThemeProvider } from 'components/theme-provider';
+import './globals.css';
+
+export const metadata: Metadata = {
+  metadataBase: new URL('http://localhost:3000'),
+  title: 'BPMN Modeler AI',
+  description: 'AI-powered BPMN diagram modeler',
+};
+
+export const viewport = {
+  maximumScale: 1, // Disable auto-zoom on mobile Safari
+};
+
+const LIGHT_THEME_COLOR = 'hsl(0 0% 100%)';
+const DARK_THEME_COLOR = 'hsl(240deg 10% 3.92%)';
+const THEME_COLOR_SCRIPT = `\
+(function() {
+  var html = document.documentElement;
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.setAttribute('name', 'theme-color');
+    document.head.appendChild(meta);
+  }
+  function updateThemeColor() {
+    var isDark = html.classList.contains('dark');
+    meta.setAttribute('content', isDark ? '${DARK_THEME_COLOR}' : '${LIGHT_THEME_COLOR}');
+  }
+  var observer = new MutationObserver(updateThemeColor);
+  observer.observe(html, { attributes: true, attributeFilter: ['class'] });
+  updateThemeColor();
+})();`;
+
+export default async function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="en"
+      // `next-themes` injects an extra classname to the body element to avoid
+      // visual flicker before hydration. Hence the `suppressHydrationWarning`
+      // prop is necessary to avoid the React hydration mismatch warning.
+      // https://github.com/pacocoursey/next-themes?tab=readme-ov-file#with-app
+      suppressHydrationWarning
+    >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: THEME_COLOR_SCRIPT,
+          }}
+        />
+      </head>
+      <body className="antialiased">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <Toaster position="top-center" />
+          {children}
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
+
+File: /workspaces/bpmnmodeler/public/default.bpmn
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  id="Definitions_1"
+  targetNamespace="http://bpmn.io/schema/bpmn"
+  exporter="bpmn-js"
+  exporterVersion="12.0.0">
+  <bpmn:process id="Process_1" name="New Process" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_1" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:endEvent id="EndEvent_1" name="End">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="152" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="158" y="145" width="24" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="592" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="600" y="145" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <di:waypoint x="188" y="120" />
+        <di:waypoint x="592" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
+
