@@ -1,4 +1,4 @@
-import { NodeTypes } from 'reactflow';
+import { NodeTypes, EdgeTypes } from 'reactflow';
 import {
   StartEvent,
   EndEvent,
@@ -10,14 +10,25 @@ import {
   Task,
   UserTask,
   ServiceTask,
+  ScriptTask,
+  BusinessRuleTask,
+  ManualTask,
+  ReceiveTask,
+  SendTask,
   ExclusiveGateway,
   ParallelGateway,
+  InclusiveGateway,
+  EventBasedGateway,
+  ComplexGateway,
   DataObject,
+  DataStore,
   Pool,
   Lane,
+  MessageFlow,
+  Association,
 } from './BpmnNodes';
 
-// Export a static nodeTypes object that won't change between renders
+// Export static type objects that won't change between renders
 export const nodeTypes: NodeTypes = {
   startEvent: StartEvent,
   endEvent: EndEvent,
@@ -29,9 +40,23 @@ export const nodeTypes: NodeTypes = {
   task: Task,
   userTask: UserTask,
   serviceTask: ServiceTask,
+  scriptTask: ScriptTask,
+  businessRuleTask: BusinessRuleTask,
+  manualTask: ManualTask,
+  receiveTask: ReceiveTask,
+  sendTask: SendTask,
   exclusiveGateway: ExclusiveGateway,
   parallelGateway: ParallelGateway,
+  inclusiveGateway: InclusiveGateway,
+  eventBasedGateway: EventBasedGateway,
+  complexGateway: ComplexGateway,
   dataObject: DataObject,
+  dataStore: DataStore,
   pool: Pool,
   lane: Lane,
+} as const;
+
+export const edgeTypes: EdgeTypes = {
+  messageFlow: MessageFlow,
+  association: Association,
 } as const;

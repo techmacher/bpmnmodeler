@@ -10,6 +10,8 @@ interface EditorState {
   nodes: Node[];
   edges: Edge[];
   selected: string[];
+  showGrid: boolean;
+  snapToGrid: boolean;
   history: {
     past: DiagramState[];
     future: DiagramState[];
@@ -17,6 +19,8 @@ interface EditorState {
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
   setSelected: (ids: string[]) => void;
+  setShowGrid: (show: boolean) => void;
+  setSnapToGrid: (snap: boolean) => void;
   undo: () => void;
   redo: () => void;
 }
@@ -25,6 +29,8 @@ export const useStore = create<EditorState>((set) => ({
   nodes: [],
   edges: [],
   selected: [],
+  showGrid: true,
+  snapToGrid: true,
   history: {
     past: [],
     future: []
@@ -44,6 +50,8 @@ export const useStore = create<EditorState>((set) => ({
     }
   })),
   setSelected: (selected: string[]) => set({ selected }),
+  setShowGrid: (showGrid: boolean) => set({ showGrid }),
+  setSnapToGrid: (snapToGrid: boolean) => set({ snapToGrid }),
   undo: () => set((state) => {
     if (state.history.past.length === 0) return state;
     const previous = state.history.past[state.history.past.length - 1];

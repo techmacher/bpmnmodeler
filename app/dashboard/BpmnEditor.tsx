@@ -75,7 +75,15 @@ const defaultEdgeOptions = {
 };
 
 export default function BpmnEditor() {
-  const { nodes, edges, setNodes, setEdges, setSelected } = useStore();
+  const { 
+    nodes, 
+    edges, 
+    setNodes, 
+    setEdges, 
+    setSelected,
+    showGrid,
+    snapToGrid 
+  } = useStore();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [zoom, setZoom] = useState(100);
@@ -340,34 +348,38 @@ export default function BpmnEditor() {
 
       {/* Main editor area */}
       <div ref={reactFlowWrapper} className="flex-1 relative" onDrop={onDrop} onDragOver={onDragOver}>
-        <ReactFlow
-          style={{ width: '100%', height: '100%' }}
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          defaultEdgeOptions={defaultEdgeOptions}
-          onInit={(instance: ReactFlowInstance) => {
-            setReactFlowInstance(instance);
-            setZoom(Math.round(instance.getViewport().zoom * 100));
-          }}
-          onMove={() => {
-            if (reactFlowInstance) {
-              const { zoom } = reactFlowInstance.getViewport();
-              setZoom(Math.round(zoom * 100));
-            }
-          }}
-          fitView
+      <ReactFlow
+        style={{ width: '100%', height: '100%' }}
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        nodeTypes={nodeTypes}
+        defaultEdgeOptions={defaultEdgeOptions}
+        onInit={(instance: ReactFlowInstance) => {
+          setReactFlowInstance(instance);
+          setZoom(Math.round(instance.getViewport().zoom * 100));
+        }}
+        onMove={() => {
+          if (reactFlowInstance) {
+            const { zoom } = reactFlowInstance.getViewport();
+            setZoom(Math.round(zoom * 100));
+          }
+        }}
+        snapToGrid={snapToGrid}
+        snapGrid={[15, 15]}
+        fitView
         >
-          <Background
-            variant={BackgroundVariant.Lines}
-            gap={12}
-            size={1}
-            color="#e5e7eb"
-            style={{ backgroundColor: '#ffffff' }}
-          />
+          {showGrid && (
+            <Background
+              variant={BackgroundVariant.Lines}
+              gap={12}
+              size={1}
+              color="#e5e7eb"
+              style={{ backgroundColor: '#ffffff' }}
+            />
+          )}
           <Controls
             showInteractive={true}
             className="bg-white border border-gray-200 shadow-sm"

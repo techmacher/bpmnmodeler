@@ -1,5 +1,5 @@
 import { lint } from 'bpmnlint';
-import type { BPMN } from 'bpmn-types';
+import type BPMN from '../types/bpmn-types';
 import Moddle from 'bpmn-moddle';
 
 export class BpmnValidator {
@@ -76,40 +76,152 @@ export class BpmnValidator {
     let createdElement: BPMN.FlowElement;
     
     switch (element.$type) {
+      // Events
+      case 'bpmn:StartEvent':
+      case 'bpmn:EndEvent':
+      case 'bpmn:IntermediateThrowEvent':
+      case 'bpmn:IntermediateCatchEvent': {
+        createdElement = this.moddle.create(element.$type, {
+          ...baseProps,
+          incoming: [],
+          outgoing: []
+        });
+        break;
+      }
+
+      // Tasks
+      case 'bpmn:Task': {
+        createdElement = this.moddle.create(element.$type, {
+          ...baseProps,
+          incoming: [],
+          outgoing: []
+        });
+        break;
+      }
       case 'bpmn:UserTask': {
         const task = element as BPMN.UserTask;
-        createdElement = this.moddle.create<BPMN.UserTask>('bpmn:UserTask', {
+        createdElement = this.moddle.create(element.$type, {
           ...baseProps,
-          $type: 'bpmn:UserTask',
-          assignee: task.assignee,
           incoming: [],
-          outgoing: []
+          outgoing: [],
+          assignee: task.assignee
         });
         break;
       }
-        
       case 'bpmn:ServiceTask': {
         const task = element as BPMN.ServiceTask;
-        createdElement = this.moddle.create<BPMN.ServiceTask>('bpmn:ServiceTask', {
+        createdElement = this.moddle.create(element.$type, {
           ...baseProps,
-          $type: 'bpmn:ServiceTask',
-          topic: task.topic,
+          incoming: [],
+          outgoing: [],
+          topic: task.topic
+        });
+        break;
+      }
+      case 'bpmn:ScriptTask': {
+        const task = element as BPMN.ScriptTask;
+        createdElement = this.moddle.create(element.$type, {
+          ...baseProps,
+          incoming: [],
+          outgoing: [],
+          scriptFormat: task.scriptFormat,
+          script: task.script
+        });
+        break;
+      }
+      case 'bpmn:BusinessRuleTask': {
+        const task = element as BPMN.BusinessRuleTask;
+        createdElement = this.moddle.create(element.$type, {
+          ...baseProps,
+          incoming: [],
+          outgoing: [],
+          implementation: task.implementation
+        });
+        break;
+      }
+      case 'bpmn:ManualTask':
+      case 'bpmn:ReceiveTask':
+      case 'bpmn:SendTask': {
+        createdElement = this.moddle.create(element.$type, {
+          ...baseProps,
           incoming: [],
           outgoing: []
         });
         break;
       }
-        
+
+      // Gateways
+      case 'bpmn:ExclusiveGateway':
+      case 'bpmn:ParallelGateway':
+      case 'bpmn:InclusiveGateway':
+      case 'bpmn:EventBasedGateway':
+      case 'bpmn:ComplexGateway': {
+        createdElement = this.moddle.create(element.$type, {
+          ...baseProps,
+          incoming: [],
+          outgoing: []
+        });
+        break;
+      }
+
+      // Data
+      case 'bpmn:DataObject':
+      case 'bpmn:DataStore': {
+        createdElement = this.moddle.create(element.$type, {
+          ...baseProps,
+          isCollection: (element as any).isCollection
+        });
+        break;
+      }
+
+      // Containers
+      case 'bpmn:Pool':
+      case 'bpmn:Lane': {
+        createdElement = this.moddle.create(element.$type, {
+          ...baseProps,
+          flowNodeRefs: (element as any).flowNodeRefs || []
+        });
+        break;
+      }
+
+      // Flows
       case 'bpmn:SequenceFlow': {
         const flow = element as BPMN.SequenceFlow;
         const sourceRef = this.createElement(flow.sourceRef) as BPMN.FlowNode;
         const targetRef = this.createElement(flow.targetRef) as BPMN.FlowNode;
         
-        createdElement = this.moddle.create<BPMN.SequenceFlow>('bpmn:SequenceFlow', {
+        createdElement = this.moddle.create('bpmn:SequenceFlow', {
           ...baseProps,
-          $type: 'bpmn:SequenceFlow',
           sourceRef,
           targetRef
+        });
+        break;
+      }
+
+      case 'bpmn:MessageFlow': {
+        const flow = element as BPMN.MessageFlow;
+        const sourceRef = flow.sourceRef;
+        const targetRef = flow.targetRef;
+        
+        createdElement = this.moddle.create('bpmn:MessageFlow', {
+          ...baseProps,
+          sourceRef: this.elementCache.get(sourceRef.id) || sourceRef,
+          targetRef: this.elementCache.get(targetRef.id) || targetRef,
+          messageRef: flow.messageRef
+        });
+        break;
+      }
+
+      case 'bpmn:Association': {
+        const association = element as BPMN.Association;
+        const sourceRef = association.sourceRef;
+        const targetRef = association.targetRef;
+        
+        createdElement = this.moddle.create('bpmn:Association', {
+          ...baseProps,
+          sourceRef: this.elementCache.get(sourceRef.id) || sourceRef,
+          targetRef: this.elementCache.get(targetRef.id) || targetRef,
+          associationDirection: association.associationDirection
         });
         break;
       }
