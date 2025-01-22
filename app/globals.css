@@ -1,6 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@import './styles/themes.css';
  
 @layer base {
   :root {
@@ -13,6 +14,63 @@
     --primary-foreground: 210 40% 98%;
     --radius: 0.5rem;
   }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --border: 217.2 32.6% 17.5%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+  }
 }
 
-/* Rest of your existing CSS */
+/* Smooth transitions for theme changes */
+* {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease-out;
+}
+
+/* ReactFlow overrides */
+.react-flow__controls {
+  @apply !bg-transparent;
+}
+
+.react-flow__controls button {
+  @apply !bg-gray-800 !border-0 !shadow-none !text-white;
+}
+
+.react-flow__controls button:hover {
+  @apply !bg-gray-700;
+}
+
+.dark .react-flow__controls button {
+  @apply !bg-gray-800/90 !border-0 !text-white;
+}
+
+.dark .react-flow__controls button:hover {
+  @apply !bg-gray-800/75;
+}
+
+.react-flow__minimap {
+  @apply !bg-transparent;
+}
+
+.dark .react-flow__minimap {
+  @apply !bg-transparent;
+}
+
+.dark .react-flow__handle {
+  background: #4b5563;
+  border-color: #6b7280;
+}
+
+.dark .react-flow__edge-path {
+  stroke: #6b7280;
+}
+
+.dark .react-flow__node {
+  color: #d1d5db;
+}

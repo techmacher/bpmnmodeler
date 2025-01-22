@@ -1,8 +1,39 @@
 import { create } from 'zustand';
 import type { Node, Edge } from 'reactflow';
 
+export interface BpmnNodeData {
+  label?: string;
+  description?: string;
+  condition?: string;
+  // Event properties
+  eventType?: string;
+  timerType?: 'date' | 'duration' | 'cycle';
+  timerExpression?: string;
+  messageName?: string;
+  correlationKey?: string;
+  // Task properties
+  taskType?: string;
+  assignee?: string;
+  dueDate?: string;
+  priority?: 'low' | 'medium' | 'high';
+  implementation?: string;
+  operation?: string;
+  scriptFormat?: string;
+  scriptContent?: string;
+  // Gateway properties
+  gatewayDirection?: 'diverging' | 'converging';
+  defaultFlow?: string;
+  // Data properties
+  dataStructure?: string;
+  dataSchema?: string;
+  // Documentation
+  documentation?: string;
+}
+
+export type BpmnNode = Node<BpmnNodeData>;
+
 export type DiagramState = {
-  nodes: Node[];
+  nodes: BpmnNode[];
   edges: Edge[];
 };
 
@@ -10,11 +41,12 @@ export interface PropertiesPanelState {
   position: { x: number; y: number } | null;
   offset: { x: number; y: number };
   isDragging: boolean;
+  nodeDragging: boolean;
   activeTab: 'general' | 'advanced' | 'documentation';
 }
 
 interface EditorState {
-  nodes: Node[];
+  nodes: BpmnNode[];
   edges: Edge[];
   selected: string[];
   showGrid: boolean;
@@ -28,8 +60,9 @@ interface EditorState {
     past: DiagramState[];
     future: DiagramState[];
   };
-  setNodes: (nodes: Node[]) => void;
+  setNodes: (nodes: BpmnNode[]) => void;
   setEdges: (edges: Edge[]) => void;
+  updateNodeData: (nodeId: string, data: Partial<BpmnNodeData>) => void;
   setSelected: (ids: string[]) => void;
   setShowGrid: (show: boolean) => void;
   setSnapToGrid: (snap: boolean) => void;
@@ -40,6 +73,7 @@ interface EditorState {
   setPanelPosition: (position: { x: number; y: number } | null) => void;
   setPanelOffset: (offset: { x: number; y: number }) => void;
   setPanelDragging: (isDragging: boolean) => void;
+  setNodeDragging: (isDragging: boolean) => void;
   setPanelTab: (tab: PropertiesPanelState['activeTab']) => void;
   undo: () => void;
   redo: () => void;
@@ -50,6 +84,7 @@ export const useStore = create<EditorState>((set) => ({
     position: null,
     offset: { x: 20, y: 0 }, // Default offset from node
     isDragging: false,
+    nodeDragging: false,
     activeTab: 'general'
   },
   nodes: [],
@@ -65,7 +100,7 @@ export const useStore = create<EditorState>((set) => ({
     past: [],
     future: []
   },
-  setNodes: (nodes: Node[]) => set((state) => {
+  setNodes: (nodes: BpmnNode[]) => set((state) => {
     if (state.isLocked) return state;
     // Only add to history if nodes actually changed
     const nodesChanged = JSON.stringify(nodes) !== JSON.stringify(state.nodes);
@@ -84,6 +119,22 @@ export const useStore = create<EditorState>((set) => ({
     return {
       edges,
       history: edgesChanged ? {
+        past: [...state.history.past, { nodes: state.nodes, edges: state.edges }],
+        future: []
+      } : state.history
+    };
+  }),
+  updateNodeData: (nodeId: string, data: Partial<BpmnNodeData>) => set((state) => {
+    if (state.isLocked) return state;
+    const updatedNodes = state.nodes.map(node =>
+      node.id === nodeId
+        ? { ...node, data: { ...node.data, ...data } }
+        : node
+    );
+    const nodesChanged = JSON.stringify(updatedNodes) !== JSON.stringify(state.nodes);
+    return {
+      nodes: updatedNodes,
+      history: nodesChanged ? {
         past: [...state.history.past, { nodes: state.nodes, edges: state.edges }],
         future: []
       } : state.history
@@ -135,6 +186,9 @@ export const useStore = create<EditorState>((set) => ({
   })),
   setPanelDragging: (isDragging) => set((state) => ({
     propertiesPanel: { ...state.propertiesPanel, isDragging }
+  })),
+  setNodeDragging: (nodeDragging) => set((state) => ({
+    propertiesPanel: { ...state.propertiesPanel, nodeDragging }
   })),
   setPanelTab: (activeTab) => set((state) => ({
     propertiesPanel: { ...state.propertiesPanel, activeTab }

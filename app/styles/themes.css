@@ -1,0 +1,31 @@
+:root {
+  /* Light theme (default) */
+  --event-intermediate: #888;
+  --event-border: #666;
+  --event-background: #fff;
+  --task-background: #fff;
+  --task-icon: #555;
+  --gateway-background: #fff;
+  --gateway-symbol: #666;
+  --data-background: #fff;
+  --container-border: #666;
+  --container-background: rgba(255, 255, 255, 0.85);
+  --container-header: rgba(245, 245, 245, 0.85);
+  --node-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+[data-theme='dark'] {
+  /* Dark theme */
+  --event-intermediate: #666;
+  --event-border: #888;
+  --event-background: #1f2937;
+  --task-background: #1f2937;
+  --task-icon: #d1d5db;
+  --gateway-background: #1f2937;
+  --gateway-symbol: #d1d5db;
+  --data-background: #1f2937;
+  --container-border: #4b5563;
+  --container-background: rgba(31, 41, 55, 0.85);
+  --container-header: rgba(55, 65, 81, 0.85);
+  --node-shadow: 0 2px 4px rgba(0,0,0,0.25);
+}

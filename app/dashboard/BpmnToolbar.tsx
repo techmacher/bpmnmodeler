@@ -1,19 +1,49 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import * as Icons from './BpmnIcons';
+'use client';
+
+import React from 'react';
 import { useStore } from '@/lib/store';
-import { useBpmnTypes } from './BpmnContext';
-import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import * as Icons from './BpmnIcons';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+// Group BPMN elements by category
+const toolbarGroups = {
+  events: [
+    { type: 'startEvent', label: 'Start Event', icon: Icons.StartEventIcon, description: 'Indicates where a process begins' },
+    { type: 'endEvent', label: 'End Event', icon: Icons.EndEventIcon, description: 'Indicates where a process ends' },
+    { type: 'intermediateThrowEvent', label: 'Intermediate Throw Event', icon: Icons.IntermediateThrowEventIcon, description: 'Throws an intermediate event' },
+    { type: 'intermediateCatchEvent', label: 'Intermediate Catch Event', icon: Icons.IntermediateCatchEventIcon, description: 'Catches an intermediate event' },
+    { type: 'timerEvent', label: 'Timer Event', icon: Icons.TimerEventIcon, description: 'Triggers based on time' },
+    { type: 'messageEvent', label: 'Message Event', icon: Icons.MessageEventIcon, description: 'Handles message-based communication' },
+    { type: 'signalEvent', label: 'Signal Event', icon: Icons.SignalEventIcon, description: 'Broadcasts or catches signals' }
+  ],
+  tasks: [
+    { type: 'task', label: 'Task', icon: Icons.TaskIcon, description: 'Basic task or activity' },
+    { type: 'userTask', label: 'User Task', icon: Icons.UserTaskIcon, description: 'Task performed by a human' },
+    { type: 'serviceTask', label: 'Service Task', icon: Icons.ServiceTaskIcon, description: 'Automated task performed by a system' },
+    { type: 'scriptTask', label: 'Script Task', icon: Icons.ScriptTaskIcon, description: 'Task executed by a script' },
+    { type: 'businessRuleTask', label: 'Business Rule Task', icon: Icons.BusinessRuleTaskIcon, description: 'Task using business rules' }
+  ],
+  gateways: [
+    { type: 'exclusiveGateway', label: 'Exclusive Gateway', icon: Icons.ExclusiveGatewayIcon, description: 'Routes flow based on conditions' },
+    { type: 'parallelGateway', label: 'Parallel Gateway', icon: Icons.ParallelGatewayIcon, description: 'Creates parallel paths' },
+    { type: 'inclusiveGateway', label: 'Inclusive Gateway', icon: Icons.InclusiveGatewayIcon, description: 'Routes based on inclusive conditions' },
+    { type: 'eventBasedGateway', label: 'Event Based Gateway', icon: Icons.EventBasedGatewayIcon, description: 'Routes based on events' }
+  ],
+  data: [
+    { type: 'dataObject', label: 'Data Object', icon: Icons.DataObjectIcon, description: 'Represents process data' },
+    { type: 'dataStore', label: 'Data Store', icon: Icons.DataStoreIcon, description: 'Represents a data store' }
+  ],
+  containers: [
+    { type: 'pool', label: 'Pool', icon: Icons.PoolIcon, description: 'Contains a process' },
+    { type: 'lane', label: 'Lane', icon: Icons.LaneIcon, description: 'Organizes activities' }
+  ]
+};
 
 export default function BpmnToolbar() {
-  const { setNodes, nodes } = useStore();
-  const { nodeTypes } = useBpmnTypes();
-  const [draggedNode, setDraggedNode] = useState<string | null>(null);
+  const [draggedNode, setDraggedNode] = React.useState<string | null>(null);
 
   const handleDragStart = (type: string, e: React.DragEvent) => {
     setDraggedNode(type);
-    
-    // Set the dragged element type for ReactFlow
     e.dataTransfer.setData('application/reactflow', type);
     e.dataTransfer.effectAllowed = 'move';
     
@@ -32,143 +62,41 @@ export default function BpmnToolbar() {
     setDraggedNode(null);
   };
 
-  const addNode = (type: string) => {
-    const newNode = {
-      id: `${type}-${nodes.length + 1}`,
-      type,
-      position: { x: 100, y: 100 },
-      data: { label: type }
-    };
-    setNodes([...nodes, newNode]);
-  };
-
-  const NodeButton = ({ 
-    type, 
-    icon: Icon, 
-    title, 
-    description 
-  }: { 
-    type: string; 
-    icon: React.ComponentType<any>; 
-    title: string; 
-    description: string;
-  }) => (
-    <TooltipPrimitive.Root delayDuration={200}>
-      <TooltipPrimitive.Trigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="w-9 h-9 p-1.5 hover:bg-white/20 hover:scale-105 transition-all rounded-lg"
-          draggable
-          onDragStart={(e) => handleDragStart(type, e)}
-          onDragEnd={handleDragEnd}
-          onClick={() => addNode(type)}
-        >
-          <Icon 
-            className="w-full h-full text-gray-700" 
-            style={{ 
-              stroke: 'currentColor',
-              strokeWidth: type.includes('Event') ? 1.5 : 2,
-              fill: type.includes('Event') ? 'white' : 'none'
-            }} 
-          />
-        </Button>
-      </TooltipPrimitive.Trigger>
-      <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content
-          side="right" 
-          sideOffset={10}
-          className="z-[1000] rounded-md bg-white/75 px-3 py-2 text-xs text-gray-900 shadow-sm"
-        >
-          <div className="max-w-[160px]">
-            <div className="font-medium">{title}</div>
-            <div className="text-gray-600">{description}</div>
-          </div>
-          <TooltipPrimitive.Arrow className="fill-white/75" />
-        </TooltipPrimitive.Content>
-      </TooltipPrimitive.Portal>
-    </TooltipPrimitive.Root>
-  );
-
   return (
-    <TooltipPrimitive.Provider>
-      <div className="fixed left-6 top-1/2 -translate-y-1/2 bg-white/30 backdrop-blur-lg rounded-xl shadow-lg border border-white/20 p-2 flex flex-col gap-2 z-[100] max-h-[80vh] overflow-y-auto">
-        {/* Events */}
-        <div className="flex flex-col gap-1.5">
-          <NodeButton
-            type="startEvent"
-            icon={Icons.StartEventIcon}
-            title="Start Event"
-            description="Indicates where a process begins"
-          />
-          <NodeButton
-            type="endEvent"
-            icon={Icons.EndEventIcon}
-            title="End Event"
-            description="Indicates where a process ends"
-          />
-          <NodeButton
-            type="timerEvent"
-            icon={Icons.TimerEventIcon}
-            title="Timer Event"
-            description="Triggers based on time conditions"
-          />
-          <NodeButton
-            type="messageEvent"
-            icon={Icons.MessageEventIcon}
-            title="Message Event"
-            description="Handles message-based communication"
-          />
-        </div>
-
-        {/* Tasks */}
-        <div className="flex flex-col gap-1.5 border-t border-white/20 pt-2">
-          <NodeButton
-            type="userTask"
-            icon={Icons.UserTaskIcon}
-            title="User Task"
-            description="Task performed by a human"
-          />
-          <NodeButton
-            type="serviceTask"
-            icon={Icons.ServiceTaskIcon}
-            title="Service Task"
-            description="Automated task performed by a system"
-          />
-          <NodeButton
-            type="task"
-            icon={Icons.TaskIcon}
-            title="Generic Task"
-            description="Basic task or activity"
-          />
-        </div>
-
-        {/* Flow Control */}
-        <div className="flex flex-col gap-1.5 border-t border-white/20 pt-2">
-          <NodeButton
-            type="exclusiveGateway"
-            icon={Icons.ExclusiveGatewayIcon}
-            title="Exclusive Gateway"
-            description="Routes flow based on conditions"
-          />
-          <NodeButton
-            type="parallelGateway"
-            icon={Icons.ParallelGatewayIcon}
-            title="Parallel Gateway"
-            description="Splits flow into parallel paths"
-          />
-        </div>
-
-        {/* Connectors */}
-        <div className="flex flex-col gap-1.5 border-t border-white/20 pt-2">
-          <NodeButton
-            type="sequenceFlow"
-            icon={Icons.ConnectIcon}
-            title="Sequence Flow"
-            description="Connects elements in sequence"
-          />
-        </div>
+    <TooltipProvider delayDuration={0}>
+      <div className="fixed left-6 top-1/2 -translate-y-1/2 backdrop-blur-lg rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-2 flex flex-col gap-2 z-[100] max-h-[80vh] overflow-y-auto bg-white/85 dark:bg-gray-800/85">
+        {Object.entries(toolbarGroups).map(([groupName, elements], groupIndex) => (
+          <div key={groupName} className={`flex flex-col gap-1.5 ${groupIndex > 0 ? 'border-t border-gray-200 dark:border-gray-700 pt-2' : ''}`}>
+            {elements.map(({ type, label, icon: Icon, description }) => (
+              <Tooltip key={type}>
+                <TooltipTrigger asChild>
+                  <button
+                    draggable
+                    onDragStart={(e) => handleDragStart(type, e)}
+                    onDragEnd={handleDragEnd}
+                    className="w-9 h-9 p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-105 transition-all rounded-lg text-gray-900 dark:text-gray-300"
+                  >
+                    <Icon 
+                      className="w-full h-full text-gray-900 dark:text-gray-300" 
+                      style={{ 
+                        stroke: 'currentColor',
+                        strokeWidth: type.includes('Event') ? 1.5 : 2,
+                        fill: type.includes('Event') ? 'currentColor' : 'none'
+                      }} 
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={10} className="rounded-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm px-3 py-2 text-xs shadow-lg border border-gray-200 dark:border-gray-700">
+                  <div className="max-w-[160px]">
+                    <div className="font-medium text-gray-700 dark:text-gray-300">{label}</div>
+                    <div className="text-gray-500 dark:text-gray-400">{description}</div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+        ))}
       </div>
-    </TooltipPrimitive.Provider>
+    </TooltipProvider>
   );
 }
