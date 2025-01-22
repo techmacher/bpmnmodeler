@@ -187,29 +187,35 @@ This guide outlines the implementation of a clean, modern BPMN editor that maxim
   - [x] Hover states and tooltips
   - [x] Drag and drop refinements
   - [x] Element organization
-- [x] Properties panel implementation:
-  - [x] Integration with React Flow:
-    - [x] ReactFlow.Panel component for initial positioning
-    - [x] Position calculation based on selected node's bounds
-    - [x] Smart offset to avoid overlap
-    - [x] Viewport-aware positioning
-  - [x] Interaction model:
-    - [x] Automatic appearance on node selection
-    - [x] Dynamic positioning relative to node
-    - [x] Draggable panel with react-draggable
-    - [x] Semi-transparent background (bg-white/90)
-    - [x] Viewport-aware scaling and positioning
-  - [x] Event handling:
-    - [x] Click outside detection
-    - [x] Escape key support
-    - [x] Smooth transitions with AnimatePresence
-    - [x] Position persistence in store
-  - [x] UI organization:
-    - [x] Tabbed interface (General, Advanced, Documentation)
-    - [x] Collapsible advanced sections
-    - [x] Quick-edit fields
-    - [x] Real-time updates
-    - [x] Validation feedback
+   - [x] Properties panel implementation:
+     - [x] Integration with React Flow:
+       - [x] ReactFlow.Panel component for initial positioning
+       - [x] Position calculation based on selected node's bounds
+       - [x] Smart offset to avoid overlap
+       - [x] Viewport-aware positioning with zoom/pan support
+     - [x] Interaction model:
+       - [x] Automatic appearance on node selection
+       - [x] Dynamic positioning relative to node
+       - [x] Draggable panel with proper viewport transforms
+       - [x] Semi-transparent background (bg-white/90)
+       - [x] Viewport-aware scaling and positioning
+     - [x] Event handling:
+       - [x] Click outside detection
+       - [x] Escape key support
+       - [x] Smooth transitions with AnimatePresence
+       - [x] Position persistence in store
+       - [x] Proper drag state handling
+     - [x] UI organization:
+       - [x] Tabbed interface (General, Advanced, Documentation)
+       - [x] Collapsible advanced sections
+       - [x] Quick-edit fields
+       - [x] Real-time updates
+       - [x] Validation feedback
+     - [ ] Future enhancements:
+       - [ ] Property search/filter functionality
+       - [ ] Quick-edit tooltips
+       - [ ] Property templates
+       - [ ] Advanced validation rules
 
 ### **Phase 2: Editor Features**
 - [x] Basic node creation and connection
@@ -266,6 +272,33 @@ This guide outlines the implementation of a clean, modern BPMN editor that maxim
   - [x] Smooth hover effects
   - [x] Handle visibility transitions
 
+### **Phase 2.7: Theme System**
+- [x] Theme Infrastructure:
+  - [x] Theme provider setup
+  - [x] Theme configuration schema
+  - [x] Theme switching mechanism
+  - [x] Theme persistence
+  - [x] CSS variable system
+- [x] Core Themes:
+  - [x] Light theme (default)
+  - [x] Dark theme
+  - [ ] High contrast theme
+  - [ ] Custom theme support
+  - [ ] Theme preview
+- [x] Theme Components:
+  - [x] Canvas background and grid
+  - [x] Node colors and styles
+  - [x] Edge appearances
+  - [x] UI elements (panels, toolbars)
+  - [x] Icons and decorators
+
+### **Next Steps**
+1. **Theme Enhancements**
+   - [ ] Add high contrast theme
+   - [ ] Add theme customization UI
+   - [ ] Add theme preview functionality
+   - [ ] Add theme export/import
+
 ### **Phase 3: AI Integration**
 - [ ] AI Chat Panel:
   - [ ] Persistent right-side panel
@@ -309,6 +342,130 @@ This guide outlines the implementation of a clean, modern BPMN editor that maxim
      - Consider using React Flow's built-in memoization utilities
      - Profile performance impact
 
+## **7. Implementation Priorities**
+
+### **Phase A: Core BPMN Elements & Properties**
+1. **Element Availability**
+   - [x] Verify all basic BPMN elements in BpmnNodeTypes
+   - [x] Ensure all elements available in BpmnControls UI
+   - [x] Add missing elements if needed
+   - [x] Organize elements in logical groups in toolbar
+
+2. **Properties Panel Implementation**
+   - [x] Create unique properties panel for each element type
+   - [x] Implement all specified properties from Section 6
+   - [x] Add validation for required fields
+   - [x] Ensure proper tab organization
+   - [x] Fix panel positioning and dragging behavior:
+     - [x] Proper viewport-aware positioning
+     - [x] Smooth dragging with viewport zoom support
+     - [x] Fixed panel offset from selected node
+   - [x] Improve styling and accessibility:
+     - [x] Consistent form element styling
+     - [x] Better focus states and dark mode support
+     - [x] Proper input backgrounds and borders
+   - [ ] Add property search/filter
+
+3. **State Management**
+   - [x] Review current store structure
+   - [x] Add missing element properties
+   - [x] Implement proper state updates
+   - [x] Add property change history
+   - [x] Optimize state updates
+
+4. **Element Styling**
+   - [x] Review and enhance element styles
+   - [ ] Add status indicators
+   - [x] Improve selection feedback
+   - [ ] Add validation indicators
+   - [ ] Implement theme-aware styling
+
+### **Next Steps**
+1. **Property Panel Enhancements**
+   - [ ] Add search/filter functionality for properties
+   - [ ] Implement property value validation
+   - [ ] Add quick-edit tooltips
+   - [ ] Improve tab organization
+
+2. **Element Status**
+   - [ ] Add configuration status indicators
+   - [ ] Add validation status indicators
+   - [ ] Add documentation status badges
+   - [ ] Implement theme-aware styling
+
+3. **BPMN Processing**
+   - [ ] Implement XML import/export
+   - [ ] Add validation system
+   - [ ] Support for different BPMN versions
+   - [ ] Error handling and recovery
+
+### **Phase B: BPMN Processing**
+1. **Import/Export**
+   - [ ] Implement BPMN XML import
+   - [ ] Implement BPMN XML export
+   - [ ] Add error handling
+   - [ ] Add progress indicators
+   - [ ] Support for different BPMN versions
+
+2. **Validation**
+   - [ ] Implement BPMN 2.0 validation
+   - [ ] Add real-time validation
+   - [ ] Show validation errors
+   - [ ] Add quick fixes
+   - [ ] Custom validation rules
+
+### **Phase C: AI Integration**
+1. **Diagram Generation**
+   - [ ] Implement text-to-BPMN conversion
+   - [ ] Add smart element placement
+   - [ ] Implement layout optimization
+   - [ ] Add style consistency
+   - [ ] Support for templates
+
+2. **Model Updates**
+   - [ ] Add AI-assisted updates
+   - [ ] Implement change suggestions
+   - [ ] Add conflict resolution
+   - [ ] Support incremental updates
+   - [ ] Preserve manual changes
+
+### **Phase D: Advanced Features** (Future)
+1. **Enhanced Properties Panel**
+   - [ ] Dynamic property system with inheritance
+   - [ ] Advanced property types (rich text, code editor)
+   - [ ] Property templates and presets
+   - [ ] Custom validation rules
+
+2. **Visual Enhancements**
+   - [ ] Advanced status indicators
+   - [ ] Interactive feedback
+   - [ ] Element decorators
+   - [ ] Advanced animations
+
+3. **Interaction Enhancements**
+   - [ ] Advanced keyboard navigation
+   - [ ] Smart mouse interactions
+   - [ ] Touch/mobile support
+   - [ ] Enhanced clipboard operations
+
+4. **Validation System**
+   - [ ] Custom validation rules
+   - [ ] Advanced error handling
+   - [ ] Quick-fix suggestions
+   - [ ] Validation API
+
+5. **Collaboration**
+   - [ ] Multi-user support
+   - [ ] Change tracking
+   - [ ] Comments/annotations
+   - [ ] Version control
+
+6. **Performance**
+   - [ ] Large diagram optimization
+   - [ ] Advanced rendering
+   - [ ] Lazy loading
+   - [ ] State management improvements
+
 ---
 
 ## **5. Best Practices**
@@ -338,5 +495,219 @@ This guide outlines the implementation of a clean, modern BPMN editor that maxim
    - Performance optimization
 
 ---
+
+## **6. BPMN Element Specifications**
+
+### **Start Events**
+- Canvas Display:
+  - Single thin circle (stroke: 2px)
+  - Light green fill (#E6F4EA)
+  - Centered icon based on type
+  - Default "New Start Event" label below
+  - Connection point on right side only
+  - Resize handles on selection
+  - Blue highlight on selection
+
+- Properties Panel:
+  - General:
+    - Name (text input)
+    - ID (auto-generated, disabled)
+    - Description (text area)
+  - Configuration:
+    - Event Type (dropdown):
+      - None (default)
+      - Timer
+      - Message
+      - Signal
+      - Conditional
+      - Multiple
+  - Timer Details (if Timer type):
+    - Timer Type (Date/Duration/Cycle)
+    - Timer Expression
+  - Message Details (if Message type):
+    - Message Name
+    - Correlation Key
+    - Message Payload Structure
+  - Documentation:
+    - Process Documentation
+    - Technical Documentation
+
+### **End Events**
+- Canvas Display:
+  - Double circle (stroke: 2px)
+  - Light red fill (#FEEEE9)
+  - Centered icon based on type
+  - Default "New End Event" label below
+  - Connection point on left side only
+  - Resize handles on selection
+  - Blue highlight on selection
+
+- Properties Panel:
+  - General:
+    - Name (text input)
+    - ID (auto-generated, disabled)
+    - Description (text area)
+  - Configuration:
+    - Event Type (dropdown):
+      - None (default)
+      - Error
+      - Message
+      - Signal
+      - Terminate
+      - Multiple
+  - Error Details (if Error type):
+    - Error Code
+    - Error Message
+    - Error Data Structure
+  - Message Details (if Message type):
+    - Message Name
+    - Correlation Key
+    - Message Payload Structure
+  - Documentation:
+    - Process Documentation
+    - Technical Documentation
+
+### **Tasks**
+- Canvas Display:
+  - Rounded rectangle (radius: 8px)
+  - White fill with shadow
+  - Task type icon in top-left
+  - Default "New Task" label centered
+  - Connection points on left and right
+  - Gear icon if configured
+  - Resize handles on selection
+  - Blue highlight on selection
+
+- Properties Panel:
+  - General:
+    - Name (text input)
+    - ID (auto-generated, disabled)
+    - Description (text area)
+  - Configuration:
+    - Task Type:
+      - User Task
+      - Service Task
+      - Script Task
+      - Business Rule Task
+      - Manual Task
+      - Send Task
+      - Receive Task
+  - Assignment (User Task):
+    - Assignee
+    - Candidate Users
+    - Candidate Groups
+    - Due Date
+    - Priority
+    - Form Key
+  - Service Configuration:
+    - Implementation Type
+    - Service Name/Reference
+    - Input/Output Parameters
+    - Retry Configuration
+  - Script Configuration:
+    - Script Format
+    - Script Source
+    - Script Resource Path
+    - Result Variable
+  - Execution:
+    - Asynchronous
+    - Exclusive
+    - Retries
+    - Job Priority
+  - Documentation:
+    - Process Documentation
+    - Technical Documentation
+    - Implementation Notes
+
+### **Gateways**
+- Canvas Display:
+  - Diamond shape
+  - Light yellow fill (#FFF8E7)
+  - Gateway type icon centered
+  - Default "New Gateway" label below
+  - Connection points on all sides
+  - Resize handles on selection
+  - Blue highlight on selection
+
+- Properties Panel:
+  - General:
+    - Name (text input)
+    - ID (auto-generated, disabled)
+    - Description (text area)
+  - Configuration:
+    - Gateway Type:
+      - Exclusive (default)
+      - Parallel
+      - Inclusive
+      - Event-based
+      - Complex
+  - Flow Configuration:
+    - Default Sequence Flow
+    - Diverging/Converging
+  - Conditions (Exclusive/Inclusive):
+    - Flow Name
+    - Condition Expression
+    - Default Flow
+  - Documentation:
+    - Process Documentation
+    - Technical Documentation
+
+### **Sequence Flows**
+- Canvas Display:
+  - Solid arrow line (2px)
+  - Waypoint addition on hover
+  - Arrow head at target
+  - Default "Flow" label centered
+  - Control points on selection
+  - Blue highlight on selection
+
+- Properties Panel:
+  - General:
+    - Name (text input)
+    - ID (auto-generated, disabled)
+    - Description (text area)
+  - Configuration:
+    - Condition Type:
+      - None (default)
+      - Expression
+      - Default Flow
+    - Condition Expression
+    - Source Element (disabled)
+    - Target Element (disabled)
+  - Styling:
+    - Line Style
+    - Line Weight
+  - Documentation:
+    - Process Documentation
+    - Technical Documentation
+
+### **Common Features**
+- Selection Behavior:
+  - Blue highlight border (2px)
+  - Resize handles where applicable
+  - Rotation handle for appropriate elements
+  - Delete with delete/backspace key
+  - Cut/Copy/Paste support
+
+- Context Menu:
+  - Delete
+  - Copy/Cut/Paste
+  - Bring to Front/Send to Back
+  - Properties
+  - Documentation
+
+- Properties Panel Layout:
+  - Always visible when selected
+  - Organized tabs
+  - Property search
+  - Validation indicators
+  - Apply/Cancel buttons
+  - Auto-save option
+
+- Quick Edit Overlay:
+  - First selection appearance
+  - Common properties
+  - Type changes
+  - Fast label editing
 
 This guide emphasizes a modern, efficient approach to BPMN modeling with a clean, icon-driven interface that maximizes workspace utility while maintaining full BPMN functionality.
