@@ -17,7 +17,7 @@ import {
 import useSWR, { useSWRConfig } from 'swr';
 import { useDebounceCallback, useWindowSize } from 'usehooks-ts';
 
-import type { Document, Suggestion, Vote } from '@/lib/db/schema';
+import type { Document, Suggestion, VoteWithState } from '@/lib/db/schema';
 import { cn, fetcher } from '@/lib/utils';
 
 import { DiffView } from './diffview';
@@ -83,7 +83,7 @@ function PureBlock({
   setAttachments: Dispatch<SetStateAction<Array<Attachment>>>;
   messages: Array<Message>;
   setMessages: Dispatch<SetStateAction<Array<Message>>>;
-  votes: Array<Vote> | undefined;
+  votes: Array<VoteWithState> | undefined;
   append: (
     message: Message | CreateMessage,
     chatRequestOptions?: ChatRequestOptions,
@@ -140,7 +140,7 @@ function PureBlock({
         setCurrentVersionIndex(documents.length - 1);
         setBlock((currentBlock) => ({
           ...currentBlock,
-          content: mostRecentDocument.content ?? '',
+          content: mostRecentDocument.xml ?? '',
         }));
       }
     }
@@ -164,12 +164,12 @@ function PureBlock({
 
           const currentDocument = currentDocuments.at(-1);
 
-          if (!currentDocument || !currentDocument.content) {
+          if (!currentDocument || !currentDocument.xml) {
             setIsContentDirty(false);
             return currentDocuments;
           }
 
-          if (currentDocument.content !== updatedContent) {
+          if (currentDocument.xml !== updatedContent) {
             await fetch(`/api/document?id=${block.documentId}`, {
               method: 'POST',
               body: JSON.stringify({
@@ -204,7 +204,7 @@ function PureBlock({
 
   const saveContent = useCallback(
     (updatedContent: string, debounce: boolean) => {
-      if (document && updatedContent !== document.content) {
+      if (document && updatedContent !== document.xml) {
         setIsContentDirty(true);
 
         if (debounce) {
@@ -220,7 +220,7 @@ function PureBlock({
   function getDocumentContentById(index: number) {
     if (!documents) return '';
     if (!documents[index]) return '';
-    return documents[index].content ?? '';
+    return documents[index].xml ?? '';
   }
 
   const handleVersionChange = (type: 'next' | 'prev' | 'toggle' | 'latest') => {
@@ -424,7 +424,7 @@ function PureBlock({
 
                 <div className="flex flex-col">
                   <div className="font-medium">
-                    {document?.title ?? block.title}
+                    {document?.name ?? block.title}
                   </div>
 
                   {isContentDirty ? (
@@ -434,7 +434,7 @@ function PureBlock({
                   ) : document ? (
                     <div className="text-sm text-muted-foreground">
                       {`Updated ${formatDistance(
-                        new Date(document.createdAt),
+                        document.createdAt ?? new Date(),
                         new Date(),
                         {
                           addSuffix: true,

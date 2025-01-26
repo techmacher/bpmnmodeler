@@ -20,13 +20,11 @@ export default function Page() {
     try {
       setIsPending(true);
       setEmail(formData.get('email') as string);
-      const result = await login({ status: 'idle' }, formData);
+      const result = await login({}, formData);
       
-      if (result.status === 'invalid_data') {
-        toast.error('Invalid email or password!');
-      } else if (result.status === 'failed') {
-        toast.error('Invalid credentials!');
-      } else if (result.status === 'success') {
+      if (result.error) {
+        toast.error(result.error);
+      } else if (result.success) {
         setIsSuccessful(true);
         router.refresh();
       }

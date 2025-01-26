@@ -20,15 +20,11 @@ export default function Page() {
     try {
       setIsPending(true);
       setEmail(formData.get('email') as string);
-      const result = await register({ status: 'idle' }, formData);
+      const result = await register({}, formData);
       
-      if (result.status === 'user_exists') {
-        toast.error('User already exists!');
-      } else if (result.status === 'invalid_data') {
-        toast.error('Invalid email or password!');
-      } else if (result.status === 'failed') {
-        toast.error('Failed to create your account!');
-      } else if (result.status === 'success') {
+      if (result.error) {
+        toast.error(result.error);
+      } else if (result.success) {
         setIsSuccessful(true);
         router.refresh();
       }

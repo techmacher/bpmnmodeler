@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import { useEffect, useState } from 'react';
 import { useReactFlow, type Node, useKeyPress, KeyCode } from 'reactflow';
 import { Button } from 'components/ui/button';
 import { 
@@ -61,13 +61,13 @@ export default function BpmnControls() {
     setSnapToGrid 
   } = useStore();
   const { fitView, getNodes, setCenter, project } = useReactFlow();
-  const [isExpanded, setIsExpanded] = React.useState(false);
-  const [showCommandPalette, setShowCommandPalette] = React.useState(false);
-  const [searchTerm, setSearchTerm] = React.useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const xmlConverter = new BpmnXmlConverter();
 
   // Command palette keyboard shortcut
-  React.useEffect(() => {
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
         event.preventDefault();

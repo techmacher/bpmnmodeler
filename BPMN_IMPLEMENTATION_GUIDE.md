@@ -292,52 +292,53 @@ This guide outlines the implementation of a clean, modern BPMN editor that maxim
   - [x] UI elements (panels, toolbars)
   - [x] Icons and decorators
 
-### **Phase 2.8: Z-Index Layering System**
-1. **CSS Variable System**
-   - [ ] Define z-index CSS variables:
-     - [ ] --z-background (0-10): Grid, pools, lanes
-     - [ ] --z-data (11-20): Data objects, stores, annotations
-     - [ ] --z-flow (21-30): Sequence flows, message flows
-     - [ ] --z-activity (31-40): Tasks, gateways
-     - [ ] --z-event (41-50): All event types
-     - [ ] --z-boundary (51-60): Boundary events, labels
-     - [ ] --z-interactive (61+): Selection, handles, tooltips
+### **Phase 2.8: Z-Index Layering System** ✅
+1. **CSS Variable System** ✅
+   - [x] Define z-index CSS variables:
+     - [x] --z-background (0-10): Grid, pools, lanes
+     - [x] --z-data (11-20): Data objects, stores, annotations
+     - [x] --z-flow (21-30): Sequence flows, message flows
+     - [x] --z-activity (31-40): Tasks, gateways
+     - [x] --z-event (41-50): All event types
+     - [x] --z-boundary (51-60): Boundary events, labels
+     - [x] --z-interactive (61+): Selection, handles, tooltips
 
-2. **Component Updates**
-   - [ ] Update node components with z-index variables:
-     - [ ] Pool/Lane components (0-10)
-     - [ ] Data elements (11-20)
-     - [ ] Flow edges (21-30)
-     - [ ] Task/Gateway components (31-40)
-     - [ ] Event components (41-50)
-     - [ ] Boundary events (51-60)
-   - [ ] Update interactive elements:
-     - [ ] Selection outlines (61+)
-     - [ ] Resize/connection handles (61+)
-     - [ ] Properties panel (highest)
-     - [ ] Tooltips and overlays (highest)
+2. **Component Updates** ✅
+   - [x] Update node components with z-index variables:
+     - [x] Pool/Lane components (0-10)
+     - [x] Data elements (11-20)
+     - [x] Flow edges (21-30)
+     - [x] Task/Gateway components (31-40)
+     - [x] Event components (41-50)
+     - [x] Boundary events (51-60)
+   - [x] Update interactive elements:
+     - [x] Selection outlines (61+)
+     - [x] Resize/connection handles (61+)
+     - [x] Properties panel (highest)
+     - [x] Tooltips and overlays (highest)
 
-3. **Theme Integration**
-   - [ ] Add z-index variables to theme system
-   - [ ] Create dark/light theme variants
+3. **Theme Integration** ✅
+   - [x] Add z-index variables to theme system
+   - [x] Create dark/light theme variants
 
-4. **Validation & Status**
-   - [ ] Add validation indicator layer
-   - [ ] Implement status badge system
-   - [ ] Add error highlight layer
-   - [ ] Position tooltips appropriately
+4. **Edge Interactions** ✅
+   - [x] Enhance handle visibility and interaction
+   - [x] Add smooth transitions and animations
+   - [x] Improve edge connection feedback
+   - [x] Add theme-aware styling for handles
+   - [x] Implement proper z-index elevation during interaction
 
-Future Enhancements:
+Future Enhancements (futured):
 - High contrast adjustments
 - Theme customization support
 - Advanced z-index controls for custom themes
+Futured: Theme Enhancements**
+   - Add high contrast theme
+   - Add theme customization UI
+   - Add theme preview functionality
+   - Add theme export/import
 
 ### **Next Steps**
-1. **Theme Enhancements**
-   - [ ] Add high contrast theme
-   - [ ] Add theme customization UI
-   - [ ] Add theme preview functionality
-   - [ ] Add theme export/import
 
 ### **Phase 3: AI Integration**
 - [ ] AI Chat Panel:
@@ -421,33 +422,109 @@ Future Enhancements:
    - [ ] Implement theme-aware styling
 
 ### **Next Steps**
-1. **Property Panel Enhancements**
-   - [ ] Add search/filter functionality for properties
-   - [ ] Implement property value validation
-   - [ ] Add quick-edit tooltips
-   - [ ] Improve tab organization
-
-2. **Element Status**
-   - [ ] Add configuration status indicators
-   - [ ] Add validation status indicators
-   - [ ] Add documentation status badges
-   - [ ] Implement theme-aware styling
-
-3. **BPMN Processing**
+1. **BPMN Processing**
    - [ ] Implement XML import/export
    - [ ] Add validation system
    - [ ] Support for different BPMN versions
    - [ ] Error handling and recovery
 
 ### **Phase B: BPMN Processing**
-1. **Import/Export**
-   - [ ] Implement BPMN XML import
-   - [ ] Implement BPMN XML export
-   - [ ] Add error handling
-   - [ ] Add progress indicators
-   - [ ] Support for different BPMN versions
+1. **Enhanced XML Converter**
+   - [ ] Update BpmnXmlConverter:
+     - [ ] Add support for diagram layout (bpmndi namespace):
+       - [ ] Parse and generate BPMNDiagram elements
+       - [ ] Handle BPMNShape for node positions/dimensions
+       - [ ] Handle BPMNEdge for connection waypoints
+       - [ ] Support nested containers (pools/lanes)
+     - [ ] Implement position/size conversion:
+       - [ ] Convert React Flow coordinates to BPMN DI
+       - [ ] Handle viewport scaling and offsets
+       - [ ] Preserve relative positioning
+       - [ ] Support grid alignment
+     - [ ] Add validation during import/export:
+       - [ ] Schema validation against BPMN 2.0
+       - [ ] Element reference integrity checks
+       - [ ] Required attribute validation
+       - [ ] Custom business rule validation
+     - [ ] Handle complex BPMN structures:
+       - [ ] Participant pools and lanes
+       - [ ] Nested sub-processes
+       - [ ] Boundary events
+       - [ ] Message flows between pools
+     - [ ] Support different BPMN versions:
+       - [ ] BPMN 2.0 compatibility
+       - [ ] Version detection and conversion
+       - [ ] Namespace handling
+       - [ ] Extension element support
 
-2. **Validation**
+2. **Import/Export Implementation**
+   - [ ] File Import:
+     - [ ] Support drag-and-drop XML files
+     - [ ] File input button with .bpmn extension
+     - [ ] Parse uploaded files as text
+     - [ ] Handle large file uploads
+     - [ ] Progress indicators
+   - [ ] Export Options:
+     - [ ] Download as .bpmn file
+     - [ ] Copy XML to clipboard
+     - [ ] Export with/without layout
+     - [ ] Export selected elements only
+     - [ ] Pretty-print XML output
+   - [ ] Validation System:
+     - [ ] Pre-import validation:
+       - [ ] XML well-formedness
+       - [ ] BPMN schema validation
+       - [ ] Custom rule validation
+     - [ ] Post-import validation:
+       - [ ] Element connectivity
+       - [ ] Process flow validation
+       - [ ] Business rule compliance
+     - [ ] Export validation:
+       - [ ] Required elements check
+       - [ ] Reference integrity
+       - [ ] Namespace validation
+     - [ ] Error Recovery:
+       - [ ] Partial import support
+       - [ ] Auto-correction options
+       - [ ] Validation error details
+       - [ ] User correction guidance
+
+3. **Store Enhancements**
+   - [ ] Add diagram management actions:
+     - [ ] createNewDiagram()
+     - [ ] importDiagram(xml: string)
+     - [ ] exportDiagram()
+   - [ ] Add diagram state tracking:
+     - [ ] currentDiagramId
+     - [ ] diagrams Map
+   - [ ] Add error handling state
+   - [ ] Implement history tracking for import/export
+
+3. **UI Controls**
+   - [ ] Add toolbar buttons:
+     - [ ] New Diagram button
+     - [ ] Import button with file input
+     - [ ] Export button with file download
+   - [ ] Add loading states
+   - [ ] Add error/success notifications
+   - [ ] Add progress indicators
+
+4. **Layout Management**
+   - [ ] Create layout utility functions:
+     - [ ] calculateNodePositions()
+     - [ ] optimizeLayout()
+   - [ ] Handle automatic layout for imports
+   - [ ] Preserve manual layout changes
+   - [ ] Implement smart node positioning
+
+5. **Error Handling**
+   - [ ] Create validation error types
+   - [ ] Add error boundary for import failures
+   - [ ] Implement user-friendly error messages
+   - [ ] Add recovery options
+   - [ ] Handle validation during import/export
+
+6. **Validation**
    - [ ] Implement BPMN 2.0 validation
    - [ ] Add real-time validation
    - [ ] Show validation errors

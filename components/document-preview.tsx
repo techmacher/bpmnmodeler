@@ -12,6 +12,10 @@ import type { UIBlock } from './block';
 import { FileIcon, FullscreenIcon, LoaderIcon } from './icons';
 import { cn, fetcher } from '@/lib/utils';
 import type { Document } from '@/lib/db/schema';
+
+export type DocumentWithUI = Document & {
+  kind?: 'text' | 'code';
+};
 import { InlineDocumentSkeleton } from './document-skeleton';
 import useSWR from 'swr';
 import { Editor } from './editor';
@@ -81,16 +85,16 @@ export function DocumentPreview({
     return <LoadingSkeleton />;
   }
 
-  const document: Document | null = previewDocument
-    ? previewDocument
+  const document: DocumentWithUI | null = previewDocument
+    ? { ...previewDocument, kind: block.kind }
     : block.status === 'streaming'
       ? {
-          title: block.title,
-          kind: block.kind,
-          content: block.content,
           id: block.documentId,
+          name: block.title,
+          xml: block.content,
           createdAt: new Date(),
           userId: 'noop',
+          kind: block.kind
         }
       : null;
 
@@ -100,7 +104,7 @@ export function DocumentPreview({
     <div className="relative w-full cursor-pointer">
       <HitboxLayer hitboxRef={hitboxRef} result={result} setBlock={setBlock} />
       <DocumentHeader
-        title={document.title}
+        title={document.name}
         isStreaming={block.status === 'streaming'}
       />
       <DocumentContent document={document} />
@@ -213,7 +217,7 @@ const DocumentHeader = memo(PureDocumentHeader, (prevProps, nextProps) => {
   return true;
 });
 
-const DocumentContent = ({ document }: { document: Document }) => {
+const DocumentContent = ({ document }: { document: DocumentWithUI }) => {
   const { block } = useBlock();
 
   const containerClassName = cn(
@@ -225,7 +229,7 @@ const DocumentContent = ({ document }: { document: Document }) => {
   );
 
   const commonProps = {
-    content: document.content ?? '',
+    content: document.xml ?? '',
     isCurrentVersion: true,
     currentVersionIndex: 0,
     status: block.status,

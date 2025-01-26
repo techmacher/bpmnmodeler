@@ -1,84 +1,132 @@
-'use server';
-
+import { signIn } from '../../auth';
+import { getUserByEmail, createUser } from '../../lib/db/queries';
+import { generateUUID } from '../../lib/db/schema';
 import { z } from 'zod';
+import { FormState } from '../../lib/types';
 
-import { createUser, getUser } from '@/lib/db/queries';
+// Action States
+export interface LoginActionState extends FormState {
+  error?: string;
+  success?: boolean;
+}
 
-import { signIn } from './auth';
+export interface RegisterActionState extends FormState {
+  error?: string;
+  success?: boolean;
+}
 
-const authFormSchema = z.object({
+// Validation Schemas
+const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
+  password: z.string().min(8),
 });
 
-export interface LoginActionState {
-  status: 'idle' | 'in_progress' | 'success' | 'failed' | 'invalid_data';
-}
+const registerSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(8),
+});
 
-export const login = async (
-  _: LoginActionState,
-  formData: FormData,
-): Promise<LoginActionState> => {
+// Actions
+export async function login(
+  prevState: LoginActionState,
+  formData: FormData
+): Promise<LoginActionState> {
   try {
-    const validatedData = authFormSchema.parse({
-      email: formData.get('email'),
-      password: formData.get('password'),
-    });
+    const data = {
+      email: formData.get('email') as string,
+      password: formData.get('password') as string,
+    };
 
-    await signIn('credentials', {
-      email: validatedData.email,
-      password: validatedData.password,
+    const result = loginSchema.safeParse(data);
+    if (!result.success) {
+      return {
+        error: 'Invalid email or password format',
+      };
+    }
+
+    const signInResult = await signIn('credentials', {
+      email: data.email,
+      password: data.password,
       redirect: false,
     });
 
-    return { status: 'success' };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { status: 'invalid_data' };
+    if (!signInResult?.ok) {
+      return {
+        error: 'Invalid email or password',
+      };
     }
 
-    return { status: 'failed' };
+    return { success: true };
+  } catch (error) {
+    return {
+      error: 'An error occurred during login',
+    };
   }
-};
-
-export interface RegisterActionState {
-  status:
-    | 'idle'
-    | 'in_progress'
-    | 'success'
-    | 'failed'
-    | 'user_exists'
-    | 'invalid_data';
 }
 
-export const register = async (
-  _: RegisterActionState,
-  formData: FormData,
-): Promise<RegisterActionState> => {
+export async function register(
+  prevState: RegisterActionState,
+  formData: FormData
+): Promise<RegisterActionState> {
   try {
-    const validatedData = authFormSchema.parse({
-      email: formData.get('email'),
-      password: formData.get('password'),
+    const data = {
+      name: formData.get('name') as string,
+      email: formData.get('email') as string,
+      password: formData.get('password') as string,
+    };
+
+    const result = registerSchema.safeParse(data);
+    if (!result.success) {
+      return {
+        error: 'Invalid registration data',
+      };
+    }
+
+    const existingUser = await getUserByEmail(data.email);
+    if (existingUser) {
+      return {
+        error: 'Email already exists',
+      };
+    }
+
+    await createUser({
+      id: generateUUID(),
+      name: data.name,
+      email: data.email,
+      emailVerified: null,
     });
 
-    const [user] = await getUser(validatedData.email);
-
-    if (user) {
-      return { status: 'user_exists' } as RegisterActionState;
-    }
-    await createUser(validatedData.email, validatedData.password);
-    await signIn('credentials', {
-      email: validatedData.email,
-      password: validatedData.password,
+    const signInResult = await signIn('credentials', {
+      email: data.email,
+      password: data.password,
       redirect: false,
     });
 
-    return { status: 'success' };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { status: 'invalid_data' };
+    if (!signInResult?.ok) {
+      return {
+        error: 'Registration successful but login failed',
+      };
     }
 
-    return { status: 'failed' };
+    return { success: true };
+  } catch (error) {
+    return {
+      error: 'An error occurred during registration',
+    };
   }
-};
+}
+
+export async function createUserIfNotExists(email: string, name: string) {
+  const existingUser = await getUserByEmail(email);
+  if (existingUser) return existingUser;
+
+  const newUser = await createUser({
+    id: generateUUID(),
+    email,
+    name,
+    emailVerified: new Date(),
+  });
+
+  return newUser;
+}

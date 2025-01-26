@@ -2,13 +2,13 @@ import type { ChatRequestOptions, Message } from 'ai';
 import { PreviewMessage, ThinkingMessage } from './message';
 import { useScrollToBottom } from './use-scroll-to-bottom';
 import { memo } from 'react';
-import type { Vote } from '@/lib/db/schema';
+import type { VoteWithState } from '@/lib/db/schema';
 import equal from 'fast-deep-equal';
 
 interface MessagesProps {
   chatId: string;
   isLoading: boolean;
-  votes: Array<Vote> | undefined;
+  votes: Array<VoteWithState> | undefined;
   messages: Array<Message>;
   setMessages: (
     messages: Message[] | ((messages: Message[]) => Message[]),

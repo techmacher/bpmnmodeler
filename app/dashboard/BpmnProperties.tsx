@@ -76,7 +76,7 @@ export function BpmnProperties() {
     if (newPosition) {
       setPanelPosition(newPosition);
     }
-  }, [selectedNode?.id, calculatePosition, setPanelPosition, propertiesPanel.isDragging, propertiesPanel.nodeDragging, dragPosition, getNode]);
+  }, [selectedNode, calculatePosition, setPanelPosition, propertiesPanel.isDragging, propertiesPanel.nodeDragging, dragPosition, getNode]);
 
   // Update position on viewport changes
   useEffect(() => {

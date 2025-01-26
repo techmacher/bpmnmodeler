@@ -1,16 +1,19 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import NextAuth from 'next-auth';
+import { authConfig } from './app/(auth)/auth.config';
 
-export function middleware(request: NextRequest) {
-  // For development, add a mock user session
-  const response = NextResponse.next();
-  response.headers.set('x-user-id', 'default-user');
-  return response;
-}
+export const middleware = NextAuth(authConfig).auth;
 
-// Skip auth for development
 export const config = {
+  // https://nextjs.org/docs/app/building-your-application/routing/middleware#matcher
   matcher: [
-    '/((?!api/auth|_next/static|_next/image|favicon.ico).*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public (public files)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
   ],
 };

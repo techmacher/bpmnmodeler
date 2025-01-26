@@ -5,7 +5,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { memo, useState } from 'react';
 
-import type { Vote } from '@/lib/db/schema';
+import type { VoteWithState } from '@/lib/db/schema';
 
 import { DocumentToolCall, DocumentToolResult } from './document';
 import { PencilEditIcon, SparklesIcon } from './icons';
@@ -31,7 +31,7 @@ const PurePreviewMessage = ({
 }: {
   chatId: string;
   message: Message;
-  vote: Vote | undefined;
+  vote: VoteWithState | undefined;
   isLoading: boolean;
   setMessages: (
     messages: Message[] | ((messages: Message[]) => Message[]),

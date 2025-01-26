@@ -1,154 +1,256 @@
 import { and, desc, eq, lt } from 'drizzle-orm';
 import { db } from './index';
-import { chat, diagram, message } from './schema';
-import type { Message } from 'ai';
+import { chat, diagram, message, user, vote } from './schema';
+import type {
+  Chat,
+  ChatWithRelations,
+  Diagram,
+  Message,
+  NewChat,
+  NewDiagram,
+  NewMessage,
+  NewUser,
+  NewVote,
+  User,
+  UserWithRelations,
+  Vote,
+  VoteWithState,
+  UISuggestion
+} from './schema';
 
-export async function getChatById({ id }: { id: string }) {
+// User queries
+export async function getUserById(id: string): Promise<User | undefined> {
   const [result] = await db
     .select()
-    .from(chat)
-    .where(eq(chat.id, id))
-    .limit(1)
-    .execute();
-
+    .from(user)
+    .where(eq(user.id, id))
+    .limit(1);
   return result;
 }
 
-export async function getDiagramByChatId({ chatId }: { chatId: string }) {
+export async function getUserByEmail(email: string): Promise<User | undefined> {
   const [result] = await db
-    .select({
-      diagrams: diagram,
-      chats: chat,
-    })
-    .from(diagram)
-    .innerJoin(chat, eq(chat.diagramId, diagram.id))
-    .where(eq(chat.id, chatId))
-    .limit(1)
-    .execute();
-
-  return result.diagrams;
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+  return result;
 }
 
-export async function createChatWithDiagram({
-  userId,
+export async function createUser(data: NewUser): Promise<User> {
+  const [result] = await db
+    .insert(user)
+    .values(data)
+    .returning();
+  return result;
+}
+
+export async function updateUser(id: string, data: Partial<NewUser>): Promise<User | undefined> {
+  const [result] = await db
+    .update(user)
+    .set(data)
+    .where(eq(user.id, id))
+    .returning();
+  return result;
+}
+
+// Diagram queries
+export async function getDiagramById(id: string): Promise<Diagram | undefined> {
+  const [result] = await db
+    .select()
+    .from(diagram)
+    .where(eq(diagram.id, id))
+    .limit(1);
+  return result;
+}
+
+export async function getDocumentsById({ id }: { id: string }): Promise<Diagram[]> {
+  return db
+    .select()
+    .from(diagram)
+    .where(eq(diagram.id, id))
+    .orderBy(desc(diagram.createdAt));
+}
+
+export async function saveDocument({
+  id,
+  content,
   title,
-  initialXml,
+  kind,
+  userId,
 }: {
-  userId: string;
+  id: string;
+  content: string;
   title: string;
-  initialXml: string;
-}) {
-  const [newDiagram] = await db
+  kind: string;
+  userId: string;
+}): Promise<Diagram> {
+  const [result] = await db
     .insert(diagram)
     .values({
+      id,
+      xml: content,
       name: title,
-      xml: initialXml,
       userId,
     })
-    .returning()
-    .execute();
-
-  const [newChat] = await db
-    .insert(chat)
-    .values({
-      title,
-      userId,
-      diagramId: newDiagram.id,
+    .onConflictDoUpdate({
+      target: diagram.id,
+      set: {
+        xml: content,
+        name: title,
+      },
     })
-    .returning()
-    .execute();
-
-  return {
-    chatId: newChat.id,
-    diagramId: newDiagram.id,
-  };
+    .returning();
+  return result;
 }
 
-export async function updateDiagram({
-  chatId,
-  xml,
+export async function deleteDocumentsByIdAfterTimestamp({
+  id,
+  timestamp,
 }: {
-  chatId: string;
-  xml: string;
-}) {
-  const chatResult = await db
+  id: string;
+  timestamp: Date;
+}): Promise<void> {
+  await db
+    .delete(diagram)
+    .where(
+      and(
+        eq(diagram.id, id),
+        lt(diagram.createdAt, timestamp)
+      )
+    );
+}
+
+export async function getUserDiagrams(userId: string): Promise<Diagram[]> {
+  return db
+    .select()
+    .from(diagram)
+    .where(eq(diagram.userId, userId))
+    .orderBy(desc(diagram.createdAt));
+}
+
+export async function createDiagram(data: NewDiagram): Promise<Diagram> {
+  const [result] = await db
+    .insert(diagram)
+    .values(data)
+    .returning();
+  return result;
+}
+
+// Chat queries
+export async function getChatById(id: string): Promise<ChatWithRelations | undefined> {
+  const [result] = await db.query.chat.findMany({
+    where: eq(chat.id, id),
+    with: {
+      user: true,
+      diagram: true,
+      messages: true,
+    },
+    limit: 1,
+  }) as [ChatWithRelations];
+  return result;
+}
+
+export async function getChatsByUserId(userId: string): Promise<Chat[]> {
+  return db
     .select()
     .from(chat)
-    .where(eq(chat.id, chatId))
-    .limit(1)
-    .execute();
-
-  if (!chatResult[0]?.diagramId) return null;
-
-  const [updatedDiagram] = await db
-    .update(diagram)
-    .set({ xml })
-    .where(eq(diagram.id, chatResult[0].diagramId))
-    .returning()
-    .execute();
-
-  return updatedDiagram;
+    .where(eq(chat.userId, userId))
+    .orderBy(desc(chat.createdAt));
 }
 
-export async function renameChatAndDiagram({
-  chatId,
-  newTitle,
-}: {
-  chatId: string;
-  newTitle: string;
-}) {
-  const [chatResult] = await db
-    .select({
-      chat: chat,
-      diagram: diagram,
+export async function createChat(data: NewChat): Promise<Chat> {
+  const [result] = await db
+    .insert(chat)
+    .values({
+      ...data,
+      visibility: data.visibility as 'public' | 'private'
     })
-    .from(chat)
-    .innerJoin(diagram, eq(chat.diagramId, diagram.id))
-    .where(eq(chat.id, chatId))
-    .limit(1)
-    .execute();
-
-  if (!chatResult) return null;
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(chat)
-      .set({ title: newTitle })
-      .where(eq(chat.id, chatId))
-      .execute();
-
-    await tx
-      .update(diagram)
-      .set({ name: newTitle })
-      .where(eq(diagram.id, chatResult.diagram.id))
-      .execute();
-  });
-
-  return {
-    chatId,
-    title: newTitle,
-  };
+    .returning();
+  return result;
 }
 
-export async function saveMessages({
-  messages: messagesToSave,
-}: {
-  messages: Array<Message & { chatId: string; createdAt: Date }>;
-}) {
-  const [savedMessage] = await db
+export async function updateChat(id: string, data: Partial<NewChat>): Promise<Chat | undefined> {
+  const [result] = await db
+    .update(chat)
+    .set({
+      ...data,
+      visibility: data.visibility as 'public' | 'private'
+    })
+    .where(eq(chat.id, id))
+    .returning();
+  return result;
+}
+
+export async function deleteChat(id: string): Promise<void> {
+  await db.delete(chat).where(eq(chat.id, id));
+}
+
+// Message queries
+export async function getMessagesByChatId(chatId: string): Promise<Message[]> {
+  return db
+    .select()
+    .from(message)
+    .where(eq(message.chatId, chatId))
+    .orderBy(desc(message.createdAt));
+}
+
+export async function createMessage(data: NewMessage): Promise<Message> {
+  const [result] = await db
     .insert(message)
-    .values(messagesToSave)
-    .returning()
-    .execute();
-
-  return savedMessage;
+    .values({
+      ...data,
+      role: data.role as 'user' | 'assistant'
+    })
+    .returning();
+  return result;
 }
 
-export async function deleteChatAndDiagram({ chatId }: { chatId: string }) {
-  // Messages and diagram will be cascade deleted due to foreign key constraints
-  await db.delete(chat).where(eq(chat.id, chatId)).execute();
+export async function deleteMessagesByChatId(chatId: string): Promise<void> {
+  await db.delete(message).where(eq(message.chatId, chatId));
 }
 
+// Vote queries
+export async function getVotesByMessageId(messageId: string): Promise<VoteWithState[]> {
+  const votes = await db
+    .select()
+    .from(vote)
+    .where(eq(vote.messageId, messageId));
+  
+  return votes.map(vote => ({
+    ...vote,
+    isUpvoted: vote.value === 'up'
+  }));
+}
+
+export async function createVote(data: NewVote): Promise<Vote> {
+  const [result] = await db
+    .insert(vote)
+    .values({
+      ...data,
+      value: data.value as 'up' | 'down'
+    })
+    .returning();
+  return result;
+}
+
+export async function updateVote(id: string, data: Partial<NewVote>): Promise<Vote | undefined> {
+  const [result] = await db
+    .update(vote)
+    .set({
+      ...data,
+      value: data.value as 'up' | 'down'
+    })
+    .where(eq(vote.id, id))
+    .returning();
+  return result;
+}
+
+export async function deleteVote(id: string): Promise<void> {
+  await db.delete(vote).where(eq(vote.id, id));
+}
+
+// Pagination helpers
 export async function getMessagesByChat({
   chatId,
   cursor,
@@ -157,7 +259,7 @@ export async function getMessagesByChat({
   chatId: string;
   cursor?: Date;
   limit?: number;
-}) {
+}): Promise<Message[]> {
   const conditions = [eq(message.chatId, chatId)];
   if (cursor) {
     conditions.push(lt(message.createdAt, cursor));
@@ -168,8 +270,7 @@ export async function getMessagesByChat({
     .from(message)
     .where(and(...conditions))
     .orderBy(desc(message.createdAt))
-    .limit(limit)
-    .execute();
+    .limit(limit);
 }
 
 export async function getChats({
@@ -180,21 +281,143 @@ export async function getChats({
   userId: string;
   cursor?: Date;
   limit?: number;
-}) {
+}): Promise<ChatWithRelations[]> {
   const conditions = [eq(chat.userId, userId)];
   if (cursor) {
     conditions.push(lt(chat.createdAt, cursor));
   }
 
-  return db
-    .select({
-      chat: chat,
-      diagram: diagram,
-    })
-    .from(chat)
-    .innerJoin(diagram, eq(chat.diagramId, diagram.id))
-    .where(and(...conditions))
-    .orderBy(desc(chat.createdAt))
-    .limit(limit)
-    .execute();
+  const results = await db.query.chat.findMany({
+    where: and(...conditions),
+    with: {
+      user: true,
+      diagram: true,
+    },
+    limit,
+    orderBy: desc(chat.createdAt),
+  }) as ChatWithRelations[];
+
+  return results;
 }
+
+// Combined operations
+export async function createChatWithDiagram({
+  userId,
+  title,
+  initialXml,
+}: {
+  userId: string;
+  title: string;
+  initialXml: string;
+}): Promise<{ chatId: string; diagramId: string }> {
+  const [newDiagram] = await db
+    .insert(diagram)
+    .values({
+      name: title,
+      xml: initialXml,
+      userId,
+    })
+    .returning();
+
+  const [newChat] = await db
+    .insert(chat)
+    .values({
+      title,
+      userId,
+      diagramId: newDiagram.id,
+    })
+    .returning();
+
+  return {
+    chatId: newChat.id,
+    diagramId: newDiagram.id,
+  };
+}
+
+export async function deleteChatAndDiagram({
+  chatId,
+}: {
+  chatId: string;
+}): Promise<void> {
+  const [chatToDelete] = await db
+    .select()
+    .from(chat)
+    .where(eq(chat.id, chatId))
+    .limit(1);
+
+  if (chatToDelete?.diagramId) {
+    await db.delete(diagram).where(eq(diagram.id, chatToDelete.diagramId));
+  }
+  await deleteChat(chatId);
+}
+
+export async function renameChatAndDiagram({
+  chatId,
+  newTitle,
+}: {
+  chatId: string;
+  newTitle: string;
+}): Promise<Chat | undefined> {
+  const [chatToUpdate] = await db
+    .select()
+    .from(chat)
+    .where(eq(chat.id, chatId))
+    .limit(1);
+
+  if (!chatToUpdate) {
+    return undefined;
+  }
+
+  if (chatToUpdate.diagramId) {
+    await db
+      .update(diagram)
+      .set({ name: newTitle })
+      .where(eq(diagram.id, chatToUpdate.diagramId));
+  }
+
+  return updateChat(chatId, { title: newTitle });
+}
+
+// Additional query functions
+export async function getVotesByChatId(chatId: string): Promise<VoteWithState[]> {
+  const votes = await db
+    .select()
+    .from(vote)
+    .where(eq(vote.messageId, chatId));
+  
+  return votes.map(vote => ({
+    ...vote,
+    isUpvoted: vote.value === 'up'
+  }));
+}
+
+export async function voteMessage(data: { chatId: string; messageId: string; value: 'up' | 'down' }): Promise<Vote> {
+  const [result] = await db
+    .insert(vote)
+    .values({
+      messageId: data.messageId,
+      userId: data.chatId, // Using chatId as userId for now
+      value: data.value
+    })
+    .returning();
+  return result;
+}
+
+export async function getSuggestionsByDocumentId(documentId: string): Promise<UISuggestion[]> {
+  // This would typically query a suggestions table, but for now return empty array
+  return [];
+}
+
+// Export schemas for validation
+export {
+  insertUserSchema,
+  selectUserSchema,
+  insertChatSchema,
+  selectChatSchema,
+  insertDiagramSchema,
+  selectDiagramSchema,
+  insertMessageSchema,
+  selectMessageSchema,
+  insertVoteSchema,
+  selectVoteSchema,
+} from './schema';

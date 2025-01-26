@@ -14,6 +14,7 @@ import type { BlockKind } from '@/components/block';
 export interface UISuggestion extends Suggestion {
   selectionStart: number;
   selectionEnd: number;
+  originalText: string;
 }
 
 interface Position {
@@ -49,13 +50,14 @@ export function projectWithPositions(
   suggestions: Array<Suggestion>,
 ): Array<UISuggestion> {
   return suggestions.map((suggestion) => {
-    const positions = findPositionsInDoc(doc, suggestion.originalText);
+    const positions = findPositionsInDoc(doc, suggestion.suggestedText);
 
     if (!positions) {
       return {
         ...suggestion,
         selectionStart: 0,
         selectionEnd: 0,
+        originalText: suggestion.suggestedText,
       };
     }
 
@@ -63,6 +65,7 @@ export function projectWithPositions(
       ...suggestion,
       selectionStart: positions.start,
       selectionEnd: positions.end,
+      originalText: suggestion.suggestedText,
     };
   });
 }

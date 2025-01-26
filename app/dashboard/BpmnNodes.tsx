@@ -98,238 +98,260 @@ const containerStyles = {
 export const StartEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <div style={{ ...eventStyles, border: `2px solid ${colors.event.start}` }}>
-      <Icons.StartEventIcon className="w-5 h-5" />
+      <Icons.StartEventIcon className="size-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+StartEvent.displayName = 'StartEvent';
 
 export const EndEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={{ ...eventStyles, border: `2px solid ${colors.event.end}` }}>
-      <Icons.EndEventIcon className="w-5 h-5" />
+      <Icons.EndEventIcon className="size-5" />
     </div>
   </>
 ));
+EndEvent.displayName = 'EndEvent';
 
 export const IntermediateThrowEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={{ ...eventStyles, border: `2px solid ${colors.event.intermediate}` }}>
-      <Icons.IntermediateThrowEventIcon className="w-5 h-5" />
+      <Icons.IntermediateThrowEventIcon className="size-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+IntermediateThrowEvent.displayName = 'IntermediateThrowEvent';
 
 export const IntermediateCatchEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={{ ...eventStyles, border: `2px double ${colors.event.intermediate}` }}>
-      <Icons.IntermediateCatchEventIcon className="w-5 h-5" />
+      <Icons.IntermediateCatchEventIcon className="size-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+IntermediateCatchEvent.displayName = 'IntermediateCatchEvent';
 
 export const TimerEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={{ ...eventStyles, border: `2px solid ${colors.event.intermediate}` }}>
-      <Icons.TimerEventIcon className="w-5 h-5" />
+      <Icons.TimerEventIcon className="size-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+TimerEvent.displayName = 'TimerEvent';
 
 export const MessageEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={{ ...eventStyles, border: `2px solid ${colors.event.intermediate}` }}>
-      <Icons.MessageEventIcon className="w-5 h-5" />
+      <Icons.MessageEventIcon className="size-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+MessageEvent.displayName = 'MessageEvent';
 
 export const SignalEvent = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={{ ...eventStyles, border: `2px solid ${colors.event.intermediate}` }}>
-      <Icons.SignalEventIcon className="w-5 h-5" />
+      <Icons.SignalEventIcon className="size-5" />
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+SignalEvent.displayName = 'SignalEvent';
 
 // Task Nodes
 export const Task = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <Icons.TaskIcon className="absolute top-2 left-2 w-5 h-5" />
+      <Icons.TaskIcon className="absolute top-2 left-2 size-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+Task.displayName = 'Task';
 
 export const UserTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <Icons.UserTaskIcon className="absolute top-2 left-2 w-5 h-5" />
+      <Icons.UserTaskIcon className="absolute top-2 left-2 size-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+UserTask.displayName = 'UserTask';
 
 export const ServiceTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <Icons.ServiceTaskIcon className="absolute top-2 left-2 w-5 h-5" />
+      <Icons.ServiceTaskIcon className="absolute top-2 left-2 size-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+ServiceTask.displayName = 'ServiceTask';
 
 export const ScriptTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <Icons.ScriptTaskIcon className="absolute top-2 left-2 w-5 h-5" />
+      <Icons.ScriptTaskIcon className="absolute top-2 left-2 size-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+ScriptTask.displayName = 'ScriptTask';
 
 export const BusinessRuleTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <Icons.BusinessRuleTaskIcon className="absolute top-2 left-2 w-5 h-5" />
+      <Icons.BusinessRuleTaskIcon className="absolute top-2 left-2 size-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+BusinessRuleTask.displayName = 'BusinessRuleTask';
 
 export const ManualTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <Icons.UserTaskIcon className="absolute top-2 left-2 w-5 h-5" />
+      <Icons.UserTaskIcon className="absolute top-2 left-2 size-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+ManualTask.displayName = 'ManualTask';
 
 export const ReceiveTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <Icons.MessageEventIcon className="absolute top-2 left-2 w-5 h-5" />
+      <Icons.MessageEventIcon className="absolute top-2 left-2 size-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+ReceiveTask.displayName = 'ReceiveTask';
 
 export const SendTask = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={taskStyles}>
-      <Icons.MessageEventIcon className="absolute top-2 left-2 w-5 h-5" />
+      <Icons.MessageEventIcon className="absolute top-2 left-2 size-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Right} />
   </>
 ));
+SendTask.displayName = 'SendTask';
 
 // Gateway Nodes
 export const ExclusiveGateway = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={gatewayStyles}>
-      <Icons.ExclusiveGatewayIcon className="w-5 h-5 -rotate-45" />
+      <Icons.ExclusiveGatewayIcon className="size-5 -rotate-45" />
     </div>
     <Handle type="source" position={Position.Right} />
     <Handle type="source" position={Position.Bottom} />
   </>
 ));
+ExclusiveGateway.displayName = 'ExclusiveGateway';
 
 export const ParallelGateway = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={gatewayStyles}>
-      <Icons.ParallelGatewayIcon className="w-5 h-5 -rotate-45" />
+      <Icons.ParallelGatewayIcon className="size-5 -rotate-45" />
     </div>
     <Handle type="source" position={Position.Right} />
     <Handle type="source" position={Position.Bottom} />
   </>
 ));
+ParallelGateway.displayName = 'ParallelGateway';
 
 export const InclusiveGateway = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={gatewayStyles}>
-      <Icons.InclusiveGatewayIcon className="w-5 h-5 -rotate-45" />
+      <Icons.InclusiveGatewayIcon className="size-5 -rotate-45" />
     </div>
     <Handle type="source" position={Position.Right} />
     <Handle type="source" position={Position.Bottom} />
   </>
 ));
+InclusiveGateway.displayName = 'InclusiveGateway';
 
 export const EventBasedGateway = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={gatewayStyles}>
-      <Icons.EventBasedGatewayIcon className="w-5 h-5 -rotate-45" />
+      <Icons.EventBasedGatewayIcon className="size-5 -rotate-45" />
     </div>
     <Handle type="source" position={Position.Right} />
     <Handle type="source" position={Position.Bottom} />
   </>
 ));
+EventBasedGateway.displayName = 'EventBasedGateway';
 
 export const ComplexGateway = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Left} />
     <div style={gatewayStyles}>
-      <Icons.ExclusiveGatewayIcon className="w-5 h-5 -rotate-45" />
+      <Icons.ExclusiveGatewayIcon className="size-5 -rotate-45" />
     </div>
     <Handle type="source" position={Position.Right} />
     <Handle type="source" position={Position.Bottom} />
   </>
 ));
+ComplexGateway.displayName = 'ComplexGateway';
 
 // Data Nodes
 export const DataObject = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Top} />
     <div style={{ ...dataStyles, width: '36px', height: '48px' }}>
-      <Icons.DataObjectIcon className="w-5 h-5" />
+      <Icons.DataObjectIcon className="size-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Bottom} />
   </>
 ));
+DataObject.displayName = 'DataObject';
 
 export const DataStore = memo(({ data }: { data: { label: string } }) => (
   <>
     <Handle type="target" position={Position.Top} />
     <div style={{ ...dataStyles, width: '48px', height: '40px' }}>
-      <Icons.DataStoreIcon className="w-5 h-5" />
+      <Icons.DataStoreIcon className="size-5" />
       {data.label}
     </div>
     <Handle type="source" position={Position.Bottom} />
   </>
 ));
+DataStore.displayName = 'DataStore';
 
 // Container Nodes
 export const Pool = memo(({ data }: { data: { label: string } }) => (
@@ -337,22 +359,26 @@ export const Pool = memo(({ data }: { data: { label: string } }) => (
     <div className="border-b border-gray-300 p-2 font-semibold">{data.label}</div>
   </div>
 ));
+Pool.displayName = 'Pool';
 
 export const Lane = memo(({ data }: { data: { label: string } }) => (
   <div style={{ ...containerStyles, width: '800px', minHeight: '100px' }}>
     <div className="border-r border-gray-300 p-2">{data.label}</div>
   </div>
 ));
+Lane.displayName = 'Lane';
 
 // Edge Types
 export const MessageFlow = memo(({ data }: EdgeProps) => (
   <div className="flex items-center">
-    <Icons.ConnectIcon className="w-4 h-4" />
+    <Icons.ConnectIcon className="size-4" />
   </div>
 ));
+MessageFlow.displayName = 'MessageFlow';
 
 export const Association = memo(({ data }: EdgeProps) => (
   <div className="flex items-center">
-    <Icons.ConnectIcon className="w-4 h-4" />
+    <Icons.ConnectIcon className="size-4" />
   </div>
 ));
+Association.displayName = 'Association';

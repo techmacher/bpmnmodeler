@@ -9,11 +9,22 @@ interface Message {
 }
 
 interface ChatProps {
+  id?: string;
   className?: string;
   initialMessages?: Message[];
+  selectedModelId?: string;
+  selectedVisibilityType?: 'public' | 'private';
+  isReadonly?: boolean;
 }
 
-export default function Chat({ className, initialMessages = [] }: ChatProps) {
+export default function Chat({
+  id,
+  className,
+  initialMessages = [],
+  selectedModelId,
+  selectedVisibilityType = 'private',
+  isReadonly = false
+}: ChatProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -68,12 +79,12 @@ export default function Chat({ className, initialMessages = [] }: ChatProps) {
               onChange={(e) => setInput(e.target.value)}
               className="flex-1 p-2 border rounded"
               placeholder="Type your message..."
-              disabled={isLoading}
+              disabled={isLoading || isReadonly}
             />
             <button
               type="submit"
               className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
-              disabled={isLoading}
+              disabled={isLoading || isReadonly}
             >
               {isLoading ? 'Sending...' : 'Send'}
             </button>

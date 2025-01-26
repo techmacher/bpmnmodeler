@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   }
 
   // For development, use a default session
-  const votes = await getVotesByChatId({ id: chatId });
+  const votes = await getVotesByChatId(chatId);
 
   return Response.json(votes, { status: 200 });
 }
@@ -31,7 +31,7 @@ export async function PATCH(request: Request) {
   await voteMessage({
     chatId,
     messageId,
-    type: type,
+    value: type,
   });
 
   return new Response('Message voted', { status: 200 });

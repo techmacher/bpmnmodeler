@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { useSWRConfig } from 'swr';
 import { useCopyToClipboard } from 'usehooks-ts';
 
-import type { Vote } from '@/lib/db/schema';
+import type { UIVote, VoteWithState } from '@/lib/db/schema';
 import { getMessageIdFromAnnotations } from '@/lib/utils';
 
 import { CopyIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
@@ -25,7 +25,7 @@ export function PureMessageActions({
 }: {
   chatId: string;
   message: Message;
-  vote: Vote | undefined;
+  vote: VoteWithState | undefined;
   isLoading: boolean;
 }) {
   const { mutate } = useSWRConfig();
@@ -76,7 +76,7 @@ export function PureMessageActions({
                 toast.promise(upvote, {
                   loading: 'Upvoting Response...',
                   success: () => {
-                    mutate<Array<Vote>>(
+                    mutate<Array<UIVote>>(
                       `/api/vote?chatId=${chatId}`,
                       (currentVotes) => {
                         if (!currentVotes) return [];
@@ -88,6 +88,7 @@ export function PureMessageActions({
                         return [
                           ...votesWithoutCurrent,
                           {
+                            id: crypto.randomUUID(),
                             chatId,
                             messageId: message.id,
                             isUpvoted: true,
@@ -130,7 +131,7 @@ export function PureMessageActions({
                 toast.promise(downvote, {
                   loading: 'Downvoting Response...',
                   success: () => {
-                    mutate<Array<Vote>>(
+                    mutate<Array<UIVote>>(
                       `/api/vote?chatId=${chatId}`,
                       (currentVotes) => {
                         if (!currentVotes) return [];
@@ -142,6 +143,7 @@ export function PureMessageActions({
                         return [
                           ...votesWithoutCurrent,
                           {
+                            id: crypto.randomUUID(),
                             chatId,
                             messageId: message.id,
                             isUpvoted: false,
