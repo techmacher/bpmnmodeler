@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { BpmnProperties } from './BpmnProperties';
+import {createProcessData, downloadFile, getEdgeCoordinates} from '@/lib/bpmn/editorHelper';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -24,8 +25,36 @@ import { useStore } from '@/lib/store';
 import { getNodeTypes, getEdgeTypes, getDefaultEdgeOptions } from './BpmnNodeConfig';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Map, Save, Download, Upload, Undo, Redo, Bot, Lock, Sun, Moon } from 'lucide-react';
+import { Map, Save, Download, Upload, Undo, Redo, Workflow, Lock, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { BpmnXmlConverter } from '@/lib/bpmn/bpmnXmlConverter';
+import type BPMN from '@/lib/types/bpmn-types';
+import { nodeTypeMapping } from './BpmnNodeTypes';
+import { any } from 'zod';
+
+interface NodeData {
+  id: string;
+  type: string;
+  data: {
+    label: string;
+  };
+  position: {
+    x: number;
+    y: number;
+  };
+  width?: number;
+  height?: number;
+}
+
+interface EdgeData {
+  id: string;
+  source: string; // ID of the source node
+  target: string; // ID of the target node
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+}
 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
@@ -64,6 +93,7 @@ function ThemeToggle() {
   );
 }
 
+
 export default function BpmnCanvas() {
   const { nodes, edges, selected, setNodes, setEdges: setEdgesStore, setSelected, setNodeDragging, setPanelPosition, undo, redo } = useStore();
   
@@ -82,6 +112,147 @@ export default function BpmnCanvas() {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const xmlConverter = new BpmnXmlConverter();
+
+  const handleExportBpmn40 = async () => {
+    try {
+      // 1. Create flow nodes first (without sequence flows)
+      const flowNodes: BPMN.FlowNode[] = nodes.map(node => ({
+        id: node.id,
+        $type: `bpmn:${nodeTypeMapping[node.type ?? 'default']}`,
+        name: node.data.label,
+        documentation: Array.isArray(node.data.documentation) 
+          ? node.data.documentation.map(doc => doc.text)
+          : [],
+        incoming: [],
+        outgoing: [],
+        ...(node.data.eventType ? { eventType: node.data.eventType } : {}),
+        ...(node.data.timerType ? { timerType: node.data.timerType } : {}),
+        ...(node.data.timerExpression ? { timerExpression: node.data.timerExpression } : {}),
+        ...(node.data.gatewayDirection ? { gatewayDirection: node.data.gatewayDirection } : {})
+      }));
+  
+      // Create lookup map
+      const flowNodeMap = new globalThis.Map(flowNodes.map(node => [node.id, node]));
+  
+      // 2. Create sequence flows with references
+      const sequenceFlows: BPMN.SequenceFlow[] = edges.map(edge => {
+        const sourceNode = flowNodeMap.get(edge.source);
+        const targetNode = flowNodeMap.get(edge.target);
+        
+        if (!sourceNode || !targetNode) {
+          throw new Error(`Source or target node not found for edge ${edge.id}`);
+        }
+  
+        const sequenceFlow: BPMN.SequenceFlow = {
+          id: edge.id,
+          $type: 'bpmn:SequenceFlow',
+          sourceRef: sourceNode,
+          targetRef: targetNode
+        };
+  
+        // Update incoming/outgoing references
+        sourceNode.outgoing.push(sequenceFlow);
+        targetNode.incoming.push(sequenceFlow);
+  
+        return sequenceFlow;
+      });
+  
+      // 3. Create DI elements using moddle
+      const diShapes = nodes.map(node => {
+        return xmlConverter.moddle.create('bpmndi:BPMNShape', {
+          id: `Shape_${node.id}`,
+          bpmnElement: flowNodeMap.get(node.id),
+          bounds: xmlConverter.moddle.create('dc:Bounds', {
+            x: node.position.x,
+            y: node.position.y,
+            width: node.width ?? 100,
+            height: node.height ?? 80
+          })
+        });
+      });
+  
+      const diEdges = edges.map(edge => {
+        // Get source and target nodes
+        const sourceNode = nodes.find(n => n.id === edge.source);
+        const targetNode = nodes.find(n => n.id === edge.target);
+      
+        if (!sourceNode || !targetNode) {
+          throw new Error(`Source or target node not found for edge ${edge.id}`);
+        }
+      
+        // Calculate edge coordinates using getEdgeCoordinates helper
+        const coords = getEdgeCoordinates(
+          {
+            source: edge.source,
+            target: edge.target,
+            sourceHandle: edge.sourceHandle ?? 'center',
+            targetHandle: edge.targetHandle ?? 'center'
+          },
+          nodes
+        );
+      
+        if (!coords) {
+          throw new Error(`Could not compute coordinates for edge ${edge.id}`);
+        }
+      
+        return xmlConverter.moddle.create('bpmndi:BPMNEdge', {
+          id: `Edge_${edge.id}`,
+          bpmnElement: sequenceFlows.find(flow => flow.id === edge.id),
+          waypoint: [
+            xmlConverter.moddle.create('dc:Point', { 
+              x: coords.sourceX, 
+              y: coords.sourceY 
+            }),
+            xmlConverter.moddle.create('dc:Point', { 
+              x: coords.targetX, 
+              y: coords.targetY 
+            })
+          ]
+        });
+      });
+  
+      // 4. Create process with all elements
+      const process = {
+        id: 'Process_1',
+        $type: 'bpmn:Process',
+        isExecutable: true,
+        flowElements: [...flowNodes, ...sequenceFlows],
+        di: xmlConverter.moddle.create('bpmndi:BPMNDiagram', {})
+      };
+  
+      // 5. Create diagram using moddle
+      const bpmnPlane = xmlConverter.moddle.create('bpmndi:BPMNPlane', {
+        id: 'BPMNPlane_1',
+        bpmnElement: process,
+        planeElement: [...diShapes, ...diEdges]
+      });
+  
+      const bpmnDiagram = xmlConverter.moddle.create('bpmndi:BPMNDiagram', {
+        id: 'BPMNDiagram_1',
+        plane: bpmnPlane
+      });
+  
+      process.di = bpmnDiagram;
+  
+      // Convert to XML and download
+      const xml = await xmlConverter.toXML30(process as BPMN.Process);
+      downloadFile(xml, 'diagram.bpmn', 'application/xml');
+    } catch (error) {
+      console.error('Failed to export BPMN:', error);
+    }
+  }
+ 
+  const handleExportSvg = () => {
+    const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      ${nodes.map(node => 
+        `<rect x="${node.position.x}" y="${node.position.y}" width="100" height="80" fill="#fff" stroke="#000"/>
+         <text x="${node.position.x + 10}" y="${node.position.y + 20}">${node.data?.label || ''}</text>`
+      ).join('\n')}
+    </svg>`;
+    downloadFile(svgContent, 'diagram.svg', 'image/svg+xml');
+  };
+  
 
   useEffect(() => {
     setMounted(true);
@@ -304,8 +475,8 @@ export default function BpmnCanvas() {
         />
         {/* Title */}
         <Panel position="top-left" className="left-4 top-4 flex items-center gap-2 !z-[var(--z-interactive)]">
-          <Bot className="h-6 w-6 text-gray-600 dark:text-gray-300" />
-          <span className="text-xl font-semibold text-gray-600 dark:text-gray-200">BPMN</span>
+          <Workflow className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+          <span className="text-xl font-semibold text-gray-600 dark:text-gray-200">Machers Workflow Studio</span>
         </Panel>
         {/* Action buttons */}
         <Panel position="top-right" className="right-2 top-2 flex gap-1 !z-[var(--z-interactive)]">
@@ -362,7 +533,7 @@ export default function BpmnCanvas() {
                   variant="ghost"
                   size="icon"
                   className="bg-white/50 hover:bg-white/75 dark:bg-gray-800/50 dark:hover:bg-gray-800/75"
-                  onClick={() => {/* TODO: Implement export */}}
+                  onClick={handleExportBpmn40}
                 >
                   <Download className="h-4 w-4 text-gray-600 dark:text-gray-300" />
                 </Button>

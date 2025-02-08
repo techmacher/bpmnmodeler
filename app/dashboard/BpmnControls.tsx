@@ -18,7 +18,7 @@ import {
   Search
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
-import { BpmnXmlConverter } from '@/lib/bpmnXmlConverter';
+import { BpmnXmlConverter } from '@/lib/bpmn/bpmnXmlConverter';
 import type BPMN from '@/lib/types/bpmn-types';
 
 interface NodeDefault {
@@ -80,7 +80,350 @@ export default function BpmnControls() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+   /* const handleExportBpmn30 = async () => {
+      try {
+                // Create BPMN.FlowNodes from React Flow nodes.
+        const flowNodes: BPMN.FlowNode[] = nodes.map(node => {
+          // Ensure documentation is always string[] or undefined
+          const documentation = (() => {
+            if (!node.data.documentation) {
+              return [];
+            }
+            if (Array.isArray(node.data.documentation)) {
+              return node.data.documentation.map(doc => 
+                typeof doc === 'string' ? doc : doc.text
+              );
+            }
+            if (typeof node.data.documentation === 'string') {
+              return [node.data.documentation];
+            }
+            return [typeof node.data.documentation === 'object' && node.data.documentation !== null && 'text' in node.data.documentation ? (node.data.documentation as { text: string }).text : ''];
+          })();
+        
+          // Create FlowNode without spreading node.data
+          return {
+            id: node.id,
+            $type: `bpmn:${nodeTypeMapping[node.type ?? 'default']}` as BPMN.FlowElement['$type'],
+            name: node.data.label,
+            documentation,
+            incoming: [],
+            outgoing: [],
+            // Add specific properties from BpmnNodeData that match BPMN.FlowNode
+            ...(node.data.eventType ? { eventType: node.data.eventType } : {}),
+            ...(node.data.timerType ? { timerType: node.data.timerType } : {}),
+            ...(node.data.timerExpression ? { timerExpression: node.data.timerExpression } : {}),
+            ...(node.data.gatewayDirection ? { gatewayDirection: node.data.gatewayDirection } : {})
+          } as BPMN.FlowNode;
+        });
 
+        // Create a lookup map for BPMN.FlowNode objects by node ID.
+        const flowNodeMap: Map<string, BPMN.FlowNode> = new globalThis.Map();
+        flowNodes.forEach(flowNode => flowNodeMap.set(flowNode.id, flowNode));
+
+        // Collect all SequenceFlow elements from edges.
+        const sequenceFlows: BPMN.SequenceFlow[] = edges.map(edge => {
+          const sourceNode = flowNodeMap.get(edge.source);
+          const targetNode = flowNodeMap.get(edge.target);
+          if (!sourceNode || !targetNode) {
+            throw new Error(`Source or target node not found for edge ${edge.id}`);
+          }
+          return {
+            id: edge.id,
+            $type: 'bpmn:SequenceFlow',
+            sourceRef: sourceNode,
+            targetRef: targetNode,
+          } as BPMN.SequenceFlow;
+        });
+        // Now update each BPMN.FlowNode's incoming and outgoing arrays
+        flowNodes.forEach(flowNode => {
+          (flowNode as BPMN.FlowNode).incoming = edges
+            .filter(edge => edge.target === flowNode.id)
+            .map(edge => {
+              const sourceNode = flowNodeMap.get(edge.source);
+              const targetNode = flowNodeMap.get(edge.target);
+              if (!sourceNode || !targetNode) {
+                throw new Error(`Source or target node not found for edge ${edge.id}`);
+              }
+              const sequenceFlow = {
+                id: edge.id,
+                $type: 'bpmn:SequenceFlow',
+                sourceRef: sourceNode,
+                targetRef: targetNode,
+              } as BPMN.SequenceFlow;
+              return sequenceFlow;
+            });
+          if ('outgoing' in flowNode) {
+            flowNode.outgoing = edges
+              .filter(edge => edge.source === flowNode.id)
+              .map(edge => {
+                const sourceNode = flowNodeMap.get(edge.source);
+                const targetNode = flowNodeMap.get(edge.target);
+                if (!sourceNode || !targetNode) {
+                  throw new Error(`Source or target node not found for edge ${edge.id}`);
+                }
+                const sequenceFlow = {
+                  id: edge.id,
+                  $type: 'bpmn:SequenceFlow',
+                  sourceRef: sourceNode,
+                  targetRef: targetNode,
+                } as BPMN.SequenceFlow;
+                return sequenceFlow;
+              });
+          }
+        });
+        // Combine flowNodes and sequenceFlows into flowElements array.
+        const flowElements: BPMN.FlowElement[] = [...flowNodes, ...sequenceFlows];
+
+        // Create BPMNShape elements for DI.
+        const BPMNShape = nodes.map(node => {  // Use React Flow nodes instead of flowNodes
+          const bounds = {
+            x: node.position.x,
+            y: node.position.y,
+            width: node.width ?? 100,
+            height: node.height ?? 80,
+          };
+        
+          const flowNode = flowNodeMap.get(node.id);
+          if (!flowNode) {
+            throw new Error(`Flow node not found for node ${node.id}`);
+          }
+        
+          return {
+            $type: 'bpmndi:BPMNShape',
+            id: `BPMNShape_${node.id}`,
+            bpmnElement: flowNode,  // Pass the FlowNode object instead of just the ID
+            Bounds: {
+              $type: 'dc:Bounds',
+              ...bounds,
+            },
+          } as BPMN.BPMNShape;
+        });
+
+                // Create BPMNEdge elements for DI.
+        const BPMNEdge = sequenceFlows.map(flow => {
+          // Get React Flow nodes for source and target
+          const sourceNode = nodes.find(n => n.id === flow.sourceRef.id);
+          const targetNode = nodes.find(n => n.id === flow.targetRef.id);
+        
+          if (!sourceNode || !targetNode) {
+            throw new Error(`Source or target node not found for edge ${flow.id}`);
+          }
+        
+          const waypoints = [
+            { x: sourceNode.position.x, y: sourceNode.position.y },
+            { x: targetNode.position.x, y: targetNode.position.y },
+          ];
+        
+          return {
+            $type: 'bpmndi:BPMNEdge',
+            id: `BPMNEdge_${flow.id}`,
+            bpmnElement: flow, // Pass the entire SequenceFlow object
+            waypoint: waypoints.map((point, index) => ({
+              $type: 'dc:Point',
+              ...point,
+              id: `waypoint_${flow.id}_${index}`,
+            })),
+          } as BPMN.BPMNEdge;
+        });
+
+        //create the process
+        const process: BPMN.Process = {
+          id: 'Process_1',
+          $type: 'bpmn:Process',
+          isExecutable: true,
+          flowElements,
+        };
+        
+        //create the BPMNPlane with a reference to the process object
+        const BPMNPlane: BPMN.BPMNPlane = {
+          $type: 'bpmndi:BPMNPlane',
+          id: `BPMNPlane_${process.id}`,
+          bpmnElement: process, // Pass the process object instead of process.id
+          BPMNShape,
+          BPMNEdge,
+        };
+        
+        // Create the BPMNDiagram
+        const BPMNDiagram: BPMN.BPMNDiagram = {
+          $type: 'bpmndi:BPMNDiagram',
+          id: `BPMNDiagram_${process.id}`,
+          BPMNPlane,
+        };
+        
+        // Finally, assign the diagram to the process
+        process.di = BPMNDiagram;
+        console.log('Process:', process);
+       
+
+        // Convert to XML and download file
+        const xml = await xmlConverter.toXML30(process);
+        downloadFile(xml, 'diagram.bpmn', 'application/xml');
+      } catch (error) {
+        console.error('Failed to export BPMN:', error);
+      }
+    }; */
+
+    /* const handleExportBpmn20 = async () => {
+      try {
+        // Create BPMN.FlowNodes from React Flow nodes.
+        const flowElements: (BPMN.FlowNode)[] = nodes.map(node => {
+          // Build incoming and outgoing arrays using edge IDs for now.
+          const incoming = edges
+            .filter(edge => edge.target === node.id)
+            .map(edge => edge.id); // temporary, will adjust below
+          const outgoing = edges
+            .filter(edge => edge.source === node.id)
+            .map(edge => edge.id); // temporary, will adjust below
+    
+          // Convert the node into a BPMN.FlowNode, preserving node-specific data.
+          return {
+            id: node.id,
+            $type: `bpmn:${nodeTypeMapping[node.type??'default']}` as BPMN.FlowElement['$type'],
+            name: node.data.label,
+            documentation: Array.isArray(node.data.documentation)
+             ? node.data.documentation.map(doc => doc.text)
+             : [],
+            incoming: [], // initialize empty, then fill in using lookup below
+            outgoing: [],
+            bounds: node.width && node.height ? { x: node.position.x, y: node.position.y, width: node.width, height: node.height } : undefined,
+            ...node.data // Spread node-specific data here
+          } as BPMN.FlowNode;
+        });
+
+        // Create a lookup map for BPMN.FlowNode objects by node ID.
+        const flowNodeMap: Map<string, BPMN.FlowNode> = new globalThis.Map();
+        flowElements.forEach(flowNode => flowNodeMap.set(flowNode.id, flowNode as BPMN.FlowNode));
+
+        // Collect all SequenceFlow elements.
+        const sequenceFlows: BPMN.SequenceFlow[] = [];
+        edges.forEach(edge => {
+          const sourceNode = flowNodeMap.get(edge.source);
+          const targetNode = flowNodeMap.get(edge.target);
+          if (!sourceNode || !targetNode) {
+            throw new Error(`Source or target node not found for edge ${edge.id}`);
+          }
+          const sequenceFlow = {
+            id: edge.id,
+            $type: 'bpmn:SequenceFlow',
+            sourceRef: sourceNode,
+            targetRef: targetNode,
+          } as BPMN.SequenceFlow;
+          sequenceFlows.push(sequenceFlow);
+        });
+        // Now update each BPMN.FlowNode's incoming and outgoing arrays
+        flowElements.forEach(flowNode => {
+          (flowNode as BPMN.FlowNode).incoming = edges
+            .filter(edge => edge.target === flowNode.id)
+            .map(edge => {
+              const sourceNode = flowNodeMap.get(edge.source);
+              const targetNode = flowNodeMap.get(edge.target);
+              if (!sourceNode || !targetNode) {
+                throw new Error(`Source or target node not found for edge ${edge.id}`);
+              }
+              const sequenceFlow = {
+                id: edge.id,
+                $type: 'bpmn:SequenceFlow',
+                sourceRef: sourceNode,
+                targetRef: targetNode,
+              } as BPMN.SequenceFlow;
+              return sequenceFlow;
+            });
+          if ('outgoing' in flowNode) {
+            flowNode.outgoing = edges
+              .filter(edge => edge.source === flowNode.id)
+              .map(edge => {
+                const sourceNode = flowNodeMap.get(edge.source);
+                const targetNode = flowNodeMap.get(edge.target);
+                if (!sourceNode || !targetNode) {
+                  throw new Error(`Source or target node not found for edge ${edge.id}`);
+                }
+                const sequenceFlow = {
+                  id: edge.id,
+                  $type: 'bpmn:SequenceFlow',
+                  sourceRef: sourceNode,
+                  targetRef: targetNode,
+                } as BPMN.SequenceFlow;
+                return sequenceFlow;
+              });
+          }
+        });
+        // Add SequenceFlow elements to a separate array.
+        const allElements = [...flowElements, ...sequenceFlows];
+
+        const process: BPMN.Process = {
+          id: 'Process_1',
+          $type: 'bpmn:Process',
+          isExecutable: true,
+          flowElements: allElements,
+        };
+    
+        // Convert to XML and download file
+        const xml = await xmlConverter.toXML20(process);
+        downloadFile(xml, 'diagram.bpmn', 'application/xml');
+      } catch (error) {
+        console.error('Failed to export BPMN:', error);
+      }
+    };   */
+  
+  /* const handleExportBpmn = async () => {
+    if (!reactFlowInstance) return;
+    const { x: viewportX, y: viewportY, zoom: currentZoom } = reactFlowInstance.getViewport();
+  
+    // Adjust node positions based on current viewport (pan + zoom).
+    const adjustedNodes = nodes.map(node => ({
+      ...node,
+      type: node.type || 'default', // Ensure type is always defined
+      position: {
+        x: node.position.x * currentZoom + viewportX,
+        y: node.position.y * currentZoom + viewportY,
+      },
+      width: node.width || undefined, // Ensure width is either a number or undefined
+      height: node.height || undefined, // Ensure height is either a number or undefined
+      data: {
+        ...node.data,
+        label: node.data?.label || '', // Ensure label is always a string
+      },
+    }));
+  
+     // Compute edge coordinates using the getEdgeCoordinates helper.
+  const adjustedEdges = edges.map(edge => {
+    const coords = getEdgeCoordinates(
+      { 
+        source: edge.source, target: edge.target, 
+        sourceHandle: edge.sourceHandle??'center', 
+        targetHandle: edge.targetHandle??'center' 
+      }, 
+      adjustedNodes
+    );
+    if (!coords) {
+      console.warn(`Edge ${edge.id} could not be computed`);
+      return {
+        ...edge,
+        sourceX: 0,
+        sourceY: 0,
+        targetX: 0,
+        targetY: 0,
+      };
+    }
+    return {
+      ...edge,
+      sourceX: coords ? coords.sourceX : 0,
+      sourceY: coords ? coords.sourceY : 0,
+      targetX: coords ? coords.targetX : 0,
+      targetY: coords ? coords.targetY : 0,
+    };
+  });
+  
+    // Build the process data for BPMN export.
+    const processData = createProcessData(adjustedNodes, adjustedEdges);
+    
+    // Convert the process data to BPMN XML.
+    const xml = await xmlConverter.toXML(processData);
+  
+    // Trigger file download.
+    downloadFile(xml, 'diagram.bpmn', 'application/xml');
+  }; */
+  
   const handleExportBpmn = async () => {
     try {
       // Convert nodes to BPMN process
@@ -88,13 +431,20 @@ export default function BpmnControls() {
         id: 'Process_1',
         $type: 'bpmn:Process',
         isExecutable: true,
-        flowElements: nodes.map(node => ({
-          id: node.id,
-          $type: `bpmn:${node.type}` as BPMN.FlowElement['$type'],
-          name: node.data.label,
-          documentation: [],
-        }))
-      };
+        flowElements: nodes.map(node => {
+          const incoming = edges.filter(edge => edge.target === node.id).map(edge => edge.id);
+          const outgoing = edges.filter(edge => edge.source === node.id).map(edge => edge.id);
+          return {
+            id: node.id,
+            $type: `bpmn:${node.type}` as BPMN.FlowElement['$type'],
+            name: node.data.label,
+            documentation: node.data.documentation ? [node.data.documentation] : [],
+            incoming,
+            outgoing,
+            ...node.data // Spread node-specific data here
+        } as BPMN.FlowNode;
+      }),
+    };
 
       // Convert to XML
       const xml = await xmlConverter.toXML(process);

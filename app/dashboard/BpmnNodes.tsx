@@ -76,6 +76,7 @@ const gatewayStyles = {
   border: `2px solid ${colors.gateway.border}`,
   boxShadow: 'var(--node-shadow, 0 2px 4px rgba(0,0,0,0.1))',
   zIndex: 'var(--z-activity)',
+  margin: '8px 0',
 };
 
 const dataStyles = {
@@ -282,12 +283,35 @@ ExclusiveGateway.displayName = 'ExclusiveGateway';
 
 export const ParallelGateway = memo(({ data }: { data: { label: string } }) => (
   <>
-    <Handle type="target" position={Position.Left} />
+    <Handle 
+      type="target" 
+      position={Position.Left}
+      style={{ top: '50%' }}
+      isConnectable={true}
+    />
     <div style={gatewayStyles}>
       <Icons.ParallelGatewayIcon className="size-5 -rotate-45" />
+      {data.label && (
+        <div className="absolute -bottom-6 w-full text-center text-xs">{data.label}</div>
+      )}
     </div>
-    <Handle type="source" position={Position.Right} />
-    <Handle type="source" position={Position.Bottom} />
+    <Handle 
+      type="source" 
+      position={Position.Right}
+      style={{ top: '50%' }}
+      isConnectable={true}
+
+    />
+    <Handle 
+      type="source" 
+      position={Position.Bottom}
+      isConnectable={true}
+      style={{ 
+        left: '50%',
+        bottom: 0,
+        transform: 'translate(-50%, 0)'
+      }}
+    />
   </>
 ));
 ParallelGateway.displayName = 'ParallelGateway';
