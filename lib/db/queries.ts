@@ -1,4 +1,4 @@
-import { and, desc, eq, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, lt } from 'drizzle-orm';
 import { db } from './index';
 import { chat, diagram, message, user, vote } from './schema';
 import type {
@@ -29,12 +29,16 @@ export async function getUserById(id: string): Promise<User | undefined> {
 }
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
-  const [result] = await db
-    .select()
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-  return result;
+  try {
+    const [result] = await db
+      .select()
+      .from(user)
+      .where(eq(user.email, email))
+      .limit(1);
+    return result;
+  } catch (error) {
+    throw error;
+  }
 }
 
 export async function createUser(data: NewUser): Promise<User> {
@@ -192,7 +196,18 @@ export async function getMessagesByChatId(chatId: string): Promise<Message[]> {
     .select()
     .from(message)
     .where(eq(message.chatId, chatId))
-    .orderBy(desc(message.createdAt));
+    .orderBy(asc(message.createdAt), desc(message.role));
+}
+
+export async function persistChatMessages(data: NewMessage[]): Promise<Message[]> {
+  const results = await db
+    .insert(message)
+    .values(data.map(d => ({
+      ...d,
+      role: d.role as 'user' | 'assistant'
+    })))
+    .returning();
+  return results;
 }
 
 export async function createMessage(data: NewMessage): Promise<Message> {
@@ -208,6 +223,23 @@ export async function createMessage(data: NewMessage): Promise<Message> {
 
 export async function deleteMessagesByChatId(chatId: string): Promise<void> {
   await db.delete(message).where(eq(message.chatId, chatId));
+}
+//delete messages newer than and including the message with the given id
+export async function deleteMessageAndBeyondByChatIdAndMessageId(chatId: string, messageId: string): Promise<void> {
+  const [result] = await db
+                      .select()
+                      .from(message)
+                      .where(and(eq(message.chatId, chatId), eq(message.id, messageId))).limit(1);
+  if (result) {
+    await db
+            .delete(message)
+            .where(
+                  and(
+                      eq(message.chatId, chatId), 
+                      gte(message.createdAt, result.createdAt)
+                    )
+                  );
+  }
 }
 
 // Vote queries
@@ -391,12 +423,12 @@ export async function getVotesByChatId(chatId: string): Promise<VoteWithState[]>
   }));
 }
 
-export async function voteMessage(data: { chatId: string; messageId: string; value: 'up' | 'down' }): Promise<Vote> {
+export async function voteMessage(data: { chatId: string; messageId: string; value: 'up' | 'down' , userId: string;}): Promise<Vote> {
   const [result] = await db
     .insert(vote)
     .values({
       messageId: data.messageId,
-      userId: data.chatId, // Using chatId as userId for now
+      userId: data.userId, // Using chatId as userId for now
       value: data.value
     })
     .returning();
