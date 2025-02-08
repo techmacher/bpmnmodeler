@@ -1,27 +1,17 @@
 'use client';
-
-import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Input } from './ui/input';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
-interface Chat {
-  chat: {
-    id: string;
-    title: string;
-    createdAt: Date;
-    userId: string;
-    diagramId: string;
-  };
-  diagram: {
-    id: string;
-    name: string;
-    xml: string;
-    createdAt: Date;
-    userId: string;
-  };
+export interface Chat {
+  id: string;
+  title: string;
+  visibility: string;
+  messages: any[];
+  diagram: any;
 }
 
 const TEMPLATES = [
@@ -33,8 +23,13 @@ const TEMPLATES = [
   { id: 'technology', name: 'Technology' },
 ];
 
-export function ChatSidebar() {
-  const router = useRouter();
+interface ChatSidebarProps {
+  onSelectChat: (chat: Chat) => void;
+}
+
+
+
+export function ChatSidebar({ onSelectChat }: ChatSidebarProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -43,9 +38,21 @@ export function ChatSidebar() {
     fetchChats();
   }, []);
 
+  //add toogle ChatSidebar support such that SidebarToggle can be used
+function useToggleChatSidebar() {
+  const [open, setOpen] = useState(false);
+
+  const toggle = () => {
+    setOpen((prev) => !prev);
+  };
+
+  return { open, toggle };
+}
+
+
   const fetchChats = async () => {
     try {
-      const response = await fetch('/api/chat');
+      const response = await fetch('/chat/api/chat');
       if (!response.ok) throw new Error('Failed to fetch chats');
       const data = await response.json();
       setChats(data);
@@ -56,7 +63,7 @@ export function ChatSidebar() {
 
   const createNewChat = async () => {
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch('/chat/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'New Chat' }),
@@ -64,7 +71,6 @@ export function ChatSidebar() {
 
       if (!response.ok) throw new Error('Failed to create chat');
       const { chatId } = await response.json();
-      router.push(`/chat/${chatId}`);
       fetchChats();
     } catch (error) {
       console.error('Error creating chat:', error);
@@ -73,7 +79,7 @@ export function ChatSidebar() {
 
   const handleRename = async (chatId: string, newTitle: string) => {
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch('/chat/api/chat', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chatId, title: newTitle }),
@@ -89,7 +95,7 @@ export function ChatSidebar() {
 
   const handleDelete = async (chatId: string) => {
     try {
-      const response = await fetch(`/api/chat?id=${chatId}`, {
+      const response = await fetch(`/chat/api/chat?id=${chatId}`, {
         method: 'DELETE',
       });
 
@@ -101,8 +107,8 @@ export function ChatSidebar() {
   };
 
   const startEditing = (chat: Chat) => {
-    setEditingId(chat.chat.id);
-    setEditingTitle(chat.chat.title);
+    setEditingId(chat.id);
+    setEditingTitle(chat.title);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, chatId: string) => {
@@ -130,23 +136,23 @@ export function ChatSidebar() {
         <div className="px-4">
           <h3 className="text-sm font-medium text-gray-400 mb-2">Recent</h3>
           {chats.map((chat) => (
-            <div key={chat.chat.id} className="group relative flex items-center mb-1">
-              {editingId === chat.chat.id ? (
+            <div key={chat.id} className="group relative flex items-center mb-1">
+              {editingId === chat.id ? (
                 <Input
                   autoFocus
                   value={editingTitle}
                   onChange={(e) => setEditingTitle(e.target.value)}
-                  onBlur={() => handleRename(chat.chat.id, editingTitle)}
-                  onKeyDown={(e) => handleKeyDown(e, chat.chat.id)}
+                  onBlur={() => handleRename(chat.id, editingTitle)}
+                  onKeyDown={(e) => handleKeyDown(e, chat.id)}
                   className="bg-gray-800 text-white border-gray-700 text-sm py-1"
                 />
               ) : (
-                <Link 
-                  href={`/chat/${chat.chat.id}`}
+                <button
+                  onClick={() => onSelectChat(chat)}
                   className="flex-1 py-2 px-2 text-sm rounded-md hover:bg-gray-800"
                 >
-                  {chat.chat.title}
-                </Link>
+                  {chat.title}
+                </button>
               )}
               <div className="absolute right-2 hidden group-hover:flex items-center gap-1">
                 <Button
@@ -161,7 +167,7 @@ export function ChatSidebar() {
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 text-gray-400 hover:text-white hover:bg-red-900/50"
-                  onClick={() => handleDelete(chat.chat.id)}
+                  onClick={() => handleDelete(chat.id)}
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -175,7 +181,7 @@ export function ChatSidebar() {
           {TEMPLATES.map((template) => (
             <button
               key={template.id}
-              onClick={() => createNewChat()}
+              onClick={createNewChat}
               className="w-full text-left py-2 px-2 text-sm rounded-md hover:bg-gray-800"
             >
               {template.name}
