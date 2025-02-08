@@ -7,6 +7,7 @@ import { DEFAULT_MODEL_NAME, models } from '@/lib/ai/models';
 import { getChatById, getMessagesByChatId } from '@/lib/db/queries';
 import { convertToUIMessages } from '@/lib/utils';
 import { DataStreamHandler } from '@/components/data-stream-handler';
+import { ChatHeader } from '@/components/chat-header';
 
 export default async function Page(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -37,8 +38,11 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
     models.find((model) => model.id === modelIdFromCookie)?.id ||
     DEFAULT_MODEL_NAME;
 
+  // console.log("session isValied",(session?.user?.id !== chat.userId),session?.user?.id ,chat.userId); 
+
   return (
     <>
+    <ChatHeader chatId={id} selectedModelId={selectedModelId} selectedVisibilityType={"private"} isReadonly={false} />
       <Chat
         id={chat.id}
         initialMessages={convertToUIMessages(messagesFromDb)}

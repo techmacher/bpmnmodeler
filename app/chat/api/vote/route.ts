@@ -20,7 +20,8 @@ export async function PATCH(request: Request) {
     chatId,
     messageId,
     type,
-  }: { chatId: string; messageId: string; type: 'up' | 'down' } =
+    userId
+  }: { chatId: string; messageId: string; type: 'up' | 'down'; userId: string } =
     await request.json();
 
   if (!chatId || !messageId || !type) {
@@ -32,6 +33,7 @@ export async function PATCH(request: Request) {
     chatId,
     messageId,
     value: type,
+    userId
   });
 
   return new Response('Message voted', { status: 200 });

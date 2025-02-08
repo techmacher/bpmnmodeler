@@ -1,6 +1,7 @@
-import { auth } from '../../../(auth)/auth';
+import {auth} from '@/app/(auth)/auth';
 import { createChatWithDiagram, deleteChatAndDiagram, getChats, renameChatAndDiagram } from '../../../../lib/db/queries';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 const defaultBpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn" exporter="bpmn-js" exporterVersion="12.0.0">
@@ -16,14 +17,23 @@ const defaultBpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>`;
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest, res: NextResponse) {
   try {
-    const session = await auth();
+    const session = await auth(
+      req as unknown as NextApiRequest,
+      {
+        ...res,
+        getHeader: (name: string) => res.headers?.get(name),
+        setHeader: (name: string, value: string) => res.headers?.set(name, value),
+      } as unknown as NextApiResponse
+    );
+
+    console.log('session', session);
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const json = await request.json();
+    const json = await req.json();
     const { title } = json;
 
     if (!title) {
@@ -43,14 +53,21 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET(request: Request) {
+export async function GET(req: NextRequest, res: NextResponse) {
   try {
-    const session = await auth();
+    const session = await auth(
+      req as unknown as NextApiRequest,
+      {
+        ...res,
+        getHeader: (name: string) => res.headers?.get(name),
+        setHeader: (name: string, value: string) => res.headers?.set(name, value),
+      } as unknown as NextApiResponse
+    );
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(req.url);
     const cursor = searchParams.get('cursor');
     const limit = searchParams.get('limit');
 
@@ -67,14 +84,21 @@ export async function GET(request: Request) {
   }
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH(req: NextRequest, res: NextResponse) {
   try {
-    const session = await auth();
+    const session = await auth(
+      req as unknown as NextApiRequest,
+      {
+        ...res,
+        getHeader: (name: string) => res.headers?.get(name),
+        setHeader: (name: string, value: string) => res.headers?.set(name, value),
+      } as unknown as NextApiResponse
+    );
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const json = await request.json();
+    const json = await req.json();
     const { chatId, title } = json;
 
     if (!chatId || !title) {
@@ -97,14 +121,23 @@ export async function PATCH(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(req: NextRequest, res: NextResponse) {
   try {
-    const session = await auth();
+
+    const session = await auth(
+      req as unknown as NextApiRequest,
+      {
+        ...res,
+        getHeader: (name: string) => res.headers?.get(name),
+        setHeader: (name: string, value: string) => res.headers?.set(name, value),
+      } as unknown as NextApiResponse
+    );
+
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(req.url);
     const chatId = searchParams.get('id');
 
     if (!chatId) {
