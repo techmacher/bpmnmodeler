@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -12,6 +12,8 @@ import { login, type LoginActionState } from '../actions';
 
 export default function Page() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
   const [email, setEmail] = useState('');
   const [isSuccessful, setIsSuccessful] = useState(false);
   const [isPending, setIsPending] = useState(false);
@@ -21,12 +23,11 @@ export default function Page() {
       setIsPending(true);
       setEmail(formData.get('email') as string);
       const result = await login({}, formData);
-      
       if (result.error) {
         toast.error(result.error);
       } else if (result.success) {
         setIsSuccessful(true);
-        router.refresh();
+        router.push(callbackUrl);
       }
     } catch (error) {
       toast.error('Failed to sign in!');
