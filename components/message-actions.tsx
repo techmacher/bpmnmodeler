@@ -17,16 +17,18 @@ import {
 import { memo } from 'react';
 import equal from 'fast-deep-equal';
 
-export function PureMessageActions({
+export  function PureMessageActions({
   chatId,
   message,
   vote,
   isLoading,
+  userId
 }: {
   chatId: string;
   message: Message;
   vote: VoteWithState | undefined;
   isLoading: boolean;
+  userId: string;
 }) {
   const { mutate } = useSWRConfig();
   const [_, copyToClipboard] = useCopyToClipboard();
@@ -64,10 +66,11 @@ export function PureMessageActions({
               onClick={async () => {
                 const messageId = getMessageIdFromAnnotations(message);
 
-                const upvote = fetch('/api/vote', {
+                const upvote = fetch('/chat/api/vote', {
                   method: 'PATCH',
                   body: JSON.stringify({
                     chatId,
+                    userId: userId,
                     messageId,
                     type: 'up',
                   }),
@@ -77,7 +80,7 @@ export function PureMessageActions({
                   loading: 'Upvoting Response...',
                   success: () => {
                     mutate<Array<UIVote>>(
-                      `/api/vote?chatId=${chatId}`,
+                      `/chat/api/vote?chatId=${chatId}`,
                       (currentVotes) => {
                         if (!currentVotes) return [];
 
@@ -90,6 +93,7 @@ export function PureMessageActions({
                           {
                             id: crypto.randomUUID(),
                             chatId,
+                            userId: userId,
                             messageId: message.id,
                             isUpvoted: true,
                           },
@@ -119,10 +123,11 @@ export function PureMessageActions({
               onClick={async () => {
                 const messageId = getMessageIdFromAnnotations(message);
 
-                const downvote = fetch('/api/vote', {
+                const downvote = fetch('/chat/api/vote', {
                   method: 'PATCH',
                   body: JSON.stringify({
                     chatId,
+                    userId: userId,
                     messageId,
                     type: 'down',
                   }),
@@ -132,7 +137,7 @@ export function PureMessageActions({
                   loading: 'Downvoting Response...',
                   success: () => {
                     mutate<Array<UIVote>>(
-                      `/api/vote?chatId=${chatId}`,
+                      `/chat/api/vote?chatId=${chatId}`,
                       (currentVotes) => {
                         if (!currentVotes) return [];
 
@@ -145,6 +150,7 @@ export function PureMessageActions({
                           {
                             id: crypto.randomUUID(),
                             chatId,
+                            userId: userId,
                             messageId: message.id,
                             isUpvoted: false,
                           },
