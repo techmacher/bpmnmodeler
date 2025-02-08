@@ -167,6 +167,7 @@ declare namespace BPMN {
     $type: 'bpmn:Process';
     isExecutable?: boolean;
     flowElements: FlowElement[];
+    di?: BPMNDiagram; // Add 'di' property
   }
 
   interface Participant extends BaseElement {
@@ -185,7 +186,47 @@ declare namespace BPMN {
   interface Definitions extends BaseElement {
     $type: 'bpmn:Definitions';
     targetNamespace: string;
-    process: Process[];
+    rootElements: (Process | Participant | DataObject | DataStore | Pool | Group | TextAnnotation)[]; // Include other root elements
+    diagrams: BPMNDiagram[]; 
+  }
+
+  // DI Elements
+  interface BPMNDiagram extends BaseElement {
+    $type: 'bpmndi:BPMNDiagram';
+    BPMNPlane: BPMNPlane;
+  }
+
+  interface BPMNPlane extends BaseElement {
+    $type: 'bpmndi:BPMNPlane';
+    bpmnElement: Process; // Referencing the Process object
+    BPMNShape: BPMNShape[];
+    BPMNEdge: BPMNEdge[];
+  }
+
+  interface BPMNShape extends BaseElement {
+    $type: 'bpmndi:BPMNShape';
+    bpmnElement: FlowNode; 
+    Bounds: Bounds; 
+  }
+
+  interface BPMNEdge extends BaseElement {
+    $type: 'bpmndi:BPMNEdge';
+    bpmnElement: SequenceFlow;
+    waypoint: Point[];
+  }
+
+  interface Bounds extends BaseElement {
+    $type: 'dc:Bounds';
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }
+
+  interface Point extends BaseElement {
+    $type: 'dc:Point';
+    x: number;
+    y: number;
   }
 }
 
