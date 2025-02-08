@@ -1,10 +1,12 @@
-import NextAuth from 'next-auth';
-import { authConfig } from './app/(auth)/auth.config';
+import { withAuth } from 'next-auth/middleware';
 
-export const middleware = NextAuth(authConfig).auth;
+export default withAuth({
+  pages: {
+    signIn: '/login', // Redirect users to the login page if not authenticated
+  },
+});
 
 export const config = {
-  // https://nextjs.org/docs/app/building-your-application/routing/middleware#matcher
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
@@ -13,7 +15,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public (public files)
+     * - register (registration page)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
+    '/((?!register|api|_next/static|_next/image|favicon.ico|public).*)',
   ],
 };
