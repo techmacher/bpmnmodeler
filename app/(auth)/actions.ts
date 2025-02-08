@@ -1,4 +1,5 @@
-import { signIn } from '../../auth';
+
+import { signIn } from 'next-auth/react';
 import { getUserByEmail, createUser } from '../../lib/db/queries';
 import { generateUUID } from '../../lib/db/schema';
 import { z } from 'zod';
@@ -22,7 +23,6 @@ const loginSchema = z.object({
 });
 
 const registerSchema = z.object({
-  name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8),
 });
@@ -92,7 +92,7 @@ export async function register(
 
     await createUser({
       id: generateUUID(),
-      name: data.name,
+      name: data.name||'', // Optional
       email: data.email,
       emailVerified: null,
     });
@@ -124,7 +124,7 @@ export async function createUserIfNotExists(email: string, name: string) {
   const newUser = await createUser({
     id: generateUUID(),
     email,
-    name,
+    name:name||'', 
     emailVerified: new Date(),
   });
 

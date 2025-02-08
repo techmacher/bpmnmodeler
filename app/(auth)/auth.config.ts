@@ -33,6 +33,7 @@ declare module 'next-auth/jwt' {
 }
 
 export const authConfig = {
+  secret: process.env.NEXTAUTH_SECRET,
   pages: {
     signIn: '/login',
   },
@@ -40,12 +41,12 @@ export const authConfig = {
     strategy: 'jwt',
   },
   callbacks: {
-    authorized({ auth, request }: { auth: { user?: { id: string } } | null; request: NextRequest }) {
+    authorized({ auth, request }: { auth: { user?: { id: string; }; } | null; request: NextRequest; }) {
       const isLoggedIn = !!auth?.user;
       const nextUrl = new URL(request.url);
       const isOnDashboard = nextUrl.pathname.startsWith('/dashboard');
       const isOnChat = nextUrl.pathname.startsWith('/chat');
-      
+
       if (isOnDashboard || isOnChat) {
         if (isLoggedIn) return true;
         return false;
@@ -54,7 +55,7 @@ export const authConfig = {
       }
       return true;
     },
-    async jwt({ token, user }: { token: JWT; user?: { id: string; email: string; name: string; image: string | null } }) {
+    async jwt({ token, user }: { token: JWT; user?: { id: string; email: string; name: string; image: string | null; }; }) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
@@ -63,7 +64,7 @@ export const authConfig = {
       }
       return token;
     },
-    async session({ session, token }: { session: { user?: { id: string; email: string; name: string; image: string | null }; expires: string }; token: JWT }) {
+    async session({ session, token }: { session: { user?: { id: string; email: string; name: string; image: string | null; }; expires: string; }; token: JWT; }) {
       if (token && session.user) {
         session.user.id = token.id;
         session.user.email = token.email;
@@ -74,6 +75,6 @@ export const authConfig = {
     },
   },
   providers: [], // configured in auth.ts
-} as NextAuthOptions;
+} as unknown as NextAuthOptions;
 
 export type AuthConfig = typeof authConfig;
