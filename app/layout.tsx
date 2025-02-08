@@ -2,6 +2,10 @@ import type { Metadata } from 'next';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from 'components/theme-provider';
 import './globals.css';
+import { getServerSession } from 'next-auth';
+import { authConfig } from './(auth)/auth';
+import { SessionProvider } from 'next-auth/react';
+import { Providers } from './providers';
 
 export const metadata: Metadata = {
   metadataBase: new URL('http://localhost:3000'),
@@ -38,6 +42,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getServerSession(authConfig);
   return (
     <html
       lang="en"
@@ -61,8 +66,7 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Toaster position="top-center" />
-          {children}
+          <Providers session={session}>{children}</Providers>
         </ThemeProvider>
       </body>
     </html>
